@@ -3,3 +3,5 @@ uvicorn[standard]>=0.29
 pydantic-settings>=2.2
 litellm>=1.40
 python-dotenv>=1.0
+sqlalchemy>=2.0
+psycopg[binary]>=3.1
