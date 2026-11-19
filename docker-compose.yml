@@ -22,8 +22,11 @@ services:
     environment:
       DWARPAL_DATABASE_URL: postgresql+psycopg://dwarpal:${POSTGRES_PASSWORD:-dwarpal_dev}@postgres:5432/dwarpal
       DWARPAL_MOCK_DELAY_MS: ${DWARPAL_MOCK_DELAY_MS:-0}
+      DWARPAL_REDIS_URL: redis://:${REDIS_PASSWORD:-dwarpal_dev}@redis:6379/0
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "127.0.0.1:8001:8000"   # DEV ONLY: direct access for admin. Remove in production.
@@ -48,6 +51,17 @@ services:
     depends_on:
       gateway:
         condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD:-dwarpal_dev} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-dwarpal_dev}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      interval: 5s
+      retries: 10
+    # no published port: only the gateway can reach Redis
 
 volumes:
   pgdata:

@@ -5,9 +5,11 @@ import uuid
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.api.schemas import ChatRequest
+from app.cache.exact import CachedCompletion, make_key
+from app.cache.replay import replay_pieces
 from app.core.auth import require_tenant
 from app.core.errors import ApiError
 from app.core.tenants import Tenant
@@ -15,6 +17,7 @@ from app.routing.providers import Provider, get_provider
 
 log = logging.getLogger("dwarpal")
 router = APIRouter(prefix="/v1", tags=["chat"])
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
 def _tokens(text: str) -> int:
@@ -32,7 +35,28 @@ def _chunk(cid: str, created: int, model: str, delta: dict, finish: str | None =
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-def _usage_recorder(request: Request, tenant: Tenant, req: ChatRequest, provider: Provider):
+def _completion_body(cid: str, created: int, model: str, c) -> dict:
+    return {
+        "id": cid,
+        "object": "chat.completion",
+        "created": created,
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": c.content},
+                "finish_reason": c.finish_reason,
+            }
+        ],
+        "usage": {
+            "prompt_tokens": c.prompt_tokens,
+            "completion_tokens": c.completion_tokens,
+            "total_tokens": c.prompt_tokens + c.completion_tokens,
+        },
+    }
+
+
+def _usage_recorder(request: Request, tenant: Tenant, req: ChatRequest, provider_name: str):
     store = request.app.state.store
     start = time.perf_counter()
     prompt_estimate = sum(_tokens(m.content) for m in req.messages)
@@ -43,7 +67,7 @@ def _usage_recorder(request: Request, tenant: Tenant, req: ChatRequest, provider
                 store.record_usage,
                 tenant_id=tenant.id,
                 model=req.model,
-                provider=provider.name,
+                provider=provider_name,
                 stream=req.stream,
                 status=status,
                 prompt_tokens=prompt_estimate if prompt_tokens is None else prompt_tokens,
@@ -56,7 +80,7 @@ def _usage_recorder(request: Request, tenant: Tenant, req: ChatRequest, provider
     return record
 
 
-async def _sse(provider: Provider, req: ChatRequest, cid: str, created: int, record):
+async def _sse(provider: Provider, req: ChatRequest, cid: str, created: int, record, store):
     yield _chunk(cid, created, req.model, {"role": "assistant"})
     parts: list[str] = []
     try:
@@ -69,8 +93,20 @@ async def _sse(provider: Provider, req: ChatRequest, cid: str, created: int, rec
         yield f"data: {json.dumps(err)}\n\n"
         yield "data: [DONE]\n\n"
         return
-    await record("ok", completion_tokens=_tokens("".join(parts)))
+    text = "".join(parts)
+    completion_tokens = _tokens(text)
+    await record("ok", completion_tokens=completion_tokens)
+    await store(text, completion_tokens)  # only complete answers are cached
     yield _chunk(cid, created, req.model, {}, finish="stop")
+    yield "data: [DONE]\n\n"
+
+
+async def _sse_replay(req: ChatRequest, cid: str, created: int, hit: CachedCompletion, record):
+    yield _chunk(cid, created, req.model, {"role": "assistant"})
+    for piece in replay_pieces(hit.content):
+        yield _chunk(cid, created, req.model, {"content": piece})
+    await record("ok", 0, 0)
+    yield _chunk(cid, created, req.model, {}, finish=hit.finish_reason)
     yield "data: [DONE]\n\n"
 
 
@@ -84,14 +120,44 @@ async def chat_completions(
             "model_not_allowed", "permission_error",
         )
     provider = get_provider(req.model, request.app.state.settings)
+    cache = request.app.state.cache
+    bypass = request.headers.get("x-dwarpal-cache", "").lower() == "bypass"
+    use_cache = cache.enabled and not bypass
+    cache_key = make_key(tenant.id, req) if use_cache else None
+    if not cache.enabled:
+        cache_status = "DISABLED"
+    else:
+        cache_status = "BYPASS" if bypass else "MISS"
     cid, created = f"chatcmpl-{uuid.uuid4().hex[:24]}", int(time.time())
-    record = _usage_recorder(request, tenant, req, provider)
+    prompt_estimate = sum(_tokens(m.content) for m in req.messages)
 
+    async def store(content, completion_tokens, prompt_tokens=None, finish="stop"):
+        if cache_key and content:
+            tokens_in = prompt_estimate if prompt_tokens is None else prompt_tokens
+            await cache.set(
+                cache_key, CachedCompletion(content, tokens_in, completion_tokens, finish)
+            )
+
+    hit = await cache.get(cache_key) if cache_key else None
+    if hit:
+        record = _usage_recorder(request, tenant, req, "cache")
+        headers = {"X-Cache": "HIT"}
+        if req.stream:
+            return StreamingResponse(
+                _sse_replay(req, cid, created, hit, record),
+                media_type="text/event-stream",
+                headers={**SSE_HEADERS, **headers},
+            )
+        await record("ok", 0, 0)
+        return JSONResponse(_completion_body(cid, created, req.model, hit), headers=headers)
+
+    record = _usage_recorder(request, tenant, req, provider.name)
+    headers = {"X-Cache": cache_status}
     if req.stream:
         return StreamingResponse(
-            _sse(provider, req, cid, created, record),
+            _sse(provider, req, cid, created, record, store),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            headers={**SSE_HEADERS, **headers},
         )
 
     try:
@@ -100,21 +166,8 @@ async def chat_completions(
         await record("error")
         raise
     await record("ok", completion.prompt_tokens, completion.completion_tokens)
-    return {
-        "id": cid,
-        "object": "chat.completion",
-        "created": created,
-        "model": req.model,
-        "choices": [
-            {
-                "index": 0,
-                "message": {"role": "assistant", "content": completion.content},
-                "finish_reason": completion.finish_reason,
-            }
-        ],
-        "usage": {
-            "prompt_tokens": completion.prompt_tokens,
-            "completion_tokens": completion.completion_tokens,
-            "total_tokens": completion.prompt_tokens + completion.completion_tokens,
-        },
-    }
+    await store(
+        completion.content, completion.completion_tokens,
+        completion.prompt_tokens, completion.finish_reason,
+    )
+    return JSONResponse(_completion_body(cid, created, req.model, completion), headers=headers)

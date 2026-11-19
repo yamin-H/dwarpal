@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     mock_delay_ms: int = 0
     admin_key: str = ""  # empty = admin API disabled
     database_url: str = "sqlite:///./dwarpal.db"
+    redis_url: str = ""          # empty = cache disabled
+    cache_ttl_seconds: int = 3600
 
 
 @lru_cache

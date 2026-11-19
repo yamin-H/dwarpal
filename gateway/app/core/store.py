@@ -98,13 +98,14 @@ class Store:
         with self._sf() as s:
             if s.get(TenantRow, tenant_id) is None:
                 raise TenantNotFound(tenant_id)
-            n, pt, ct, avg_ms, errs = s.execute(
+            n, pt, ct, avg_ms, errs, hits = s.execute(
                 select(
                     func.count(UsageRow.id),
                     func.coalesce(func.sum(UsageRow.prompt_tokens), 0),
                     func.coalesce(func.sum(UsageRow.completion_tokens), 0),
                     func.coalesce(func.avg(UsageRow.latency_ms), 0),
                     func.coalesce(func.sum(case((UsageRow.status != "ok", 1), else_=0)), 0),
+                    func.coalesce(func.sum(case((UsageRow.provider == "cache", 1), else_=0)), 0),
                 ).where(UsageRow.tenant_id == tenant_id)
             ).one()
         return {
@@ -113,5 +114,7 @@ class Store:
             "completion_tokens": int(ct),
             "total_tokens": int(pt) + int(ct),
             "errors": int(errs),
+            "cache_hits": int(hits),
+            "cache_hit_rate": round(int(hits) / int(n), 3) if int(n) else 0.0,
             "avg_latency_ms": round(float(avg_ms), 1),
         }
