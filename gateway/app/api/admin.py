@@ -42,3 +42,10 @@ def revoke_key(key_id: str, request: Request):
     if not request.app.state.store.revoke_key(key_id):
         raise ApiError(404, "Key not found.", "key_not_found")
     return {"revoked": True}
+
+@router.get("/tenants/{tenant_id}/usage")
+def tenant_usage(tenant_id: str, request: Request):
+    try:
+        return request.app.state.store.usage_summary(tenant_id)
+    except TenantNotFound:
+        raise ApiError(404, "Tenant not found.", "tenant_not_found") from None
