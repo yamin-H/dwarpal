@@ -1,7 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 from typing import AsyncIterator, Protocol
-
+from app.config import Settings
 from app.api.schemas import ChatRequest
 from app.config import get_settings
 from app.core.errors import ApiError
@@ -53,7 +53,7 @@ class MockProvider:
             yield word if i == 0 else " " + word
 
 
-def get_provider(model: str) -> Provider:
+def get_provider(model: str, settings: Settings) -> Provider:
     if model in ("auto", "mock-echo"):
-        return MockProvider(get_settings().mock_delay_ms)
+        return MockProvider(settings.mock_delay_ms)
     raise ApiError(404, f"Model '{model}' not found", "model_not_found")

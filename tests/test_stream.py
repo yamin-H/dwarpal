@@ -1,10 +1,5 @@
 import json
 
-from fastapi.testclient import TestClient
-
-from app.main import create_app
-
-client = TestClient(create_app())
 URL = "/v1/chat/completions"
 PAYLOAD = {"model": "auto", "stream": True,
            "messages": [{"role": "user", "content": "hello world"}]}
@@ -14,8 +9,8 @@ def parse(text: str) -> list[str]:
     return [line[6:] for line in text.splitlines() if line.startswith("data: ")]
 
 
-def test_stream_format_and_content():
-    r = client.post(URL, json=PAYLOAD)
+def test_stream_format_and_content(client, auth):
+    r = client.post(URL, json=PAYLOAD, headers=auth)
     assert r.headers["content-type"].startswith("text/event-stream")
     events = parse(r.text)
     assert events[-1] == "[DONE]"

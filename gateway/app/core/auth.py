@@ -1,5 +1,5 @@
 import hmac
-
+from app.core.tenants import Tenant
 from fastapi import Request
 
 from app.core.errors import ApiError
@@ -18,3 +18,17 @@ def require_admin(request: Request) -> None:
     token = bearer_token(request)
     if token is None or not hmac.compare_digest(token, admin_key):
         raise ApiError(401, "Invalid admin key.", "invalid_admin_key", "authentication_error")
+
+def require_tenant(request: Request) -> Tenant:
+    token = bearer_token(request)
+    if token is None:
+        raise ApiError(
+            401, "Missing API key. Use 'Authorization: Bearer <key>'.",
+            "missing_api_key", "authentication_error",
+        )
+    tenant = request.app.state.store.resolve(token)
+    if tenant is None:
+        raise ApiError(
+            401, "Invalid or revoked API key.", "invalid_api_key", "authentication_error"
+        )
+    return tenant

@@ -5,7 +5,13 @@ import uuid
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
+
 from app.api.schemas import ChatRequest
+from app.core.auth import require_tenant
+from app.core.errors import ApiError
+from app.core.tenants import Tenant
 from app.routing.providers import Provider, get_provider
 
 router = APIRouter(prefix="/v1", tags=["chat"])
@@ -31,16 +37,17 @@ async def _sse(provider: Provider, req: ChatRequest, cid: str, created: int):
 
 
 @router.post("/chat/completions")
-async def chat_completions(req: ChatRequest):
-    provider = get_provider(req.model)
-    cid, created = f"chatcmpl-{uuid.uuid4().hex[:24]}", int(time.time())
-
-    if req.stream:
-        return StreamingResponse(
-            _sse(provider, req, cid, created),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+async def chat_completions(
+    req: ChatRequest, request: Request, tenant: Tenant = Depends(require_tenant)
+):
+    if not tenant.allows(req.model):
+        raise ApiError(
+            403, f"Model '{req.model}' is not enabled for this tenant.",
+            "model_not_allowed", "permission_error",
         )
+    provider = get_provider(req.model, request.app.state.settings)
+    cid, created = f"chatcmpl-{uuid.uuid4().hex[:24]}", int(time.time())
+    # ...rest of the function stays exactly the same
 
     completion = await provider.complete(req)
     return {
