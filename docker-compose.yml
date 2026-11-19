@@ -6,11 +6,29 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dwarpal_dev}
       POSTGRES_DB: dwarpal
     ports:
-      - "127.0.0.1:5432:5432"   # localhost only, never exposed publicly
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dwarpal"]
+      interval: 5s
+      retries: 10
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    env_file: .env
+    environment:
+      DWARPAL_DATABASE_URL: postgresql+psycopg://dwarpal:${POSTGRES_PASSWORD:-dwarpal_dev}@postgres:5432/dwarpal
+      DWARPAL_MOCK_DELAY_MS: ${DWARPAL_MOCK_DELAY_MS:-0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8001:8000"   # DEV ONLY: direct access for admin. Remove in production.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 5s
       retries: 10
 
