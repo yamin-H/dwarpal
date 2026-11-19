@@ -13,7 +13,7 @@ def test_admin_requires_key(client):
 
 
 def test_admin_disabled_when_no_key_configured():
-    c = TestClient(create_app(Settings(admin_key="", _env_file=None)))
+    c = TestClient(create_app(Settings(admin_key="", database_url="sqlite://", _env_file=None)))
     assert c.post("/admin/tenants", json={"id": "abc", "name": "x"}).status_code == 403
 
 

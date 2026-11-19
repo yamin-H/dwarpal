@@ -1,15 +1,8 @@
-from fastapi.testclient import TestClient
-
-from app.main import create_app
-
-client = TestClient(create_app())
-
-
-def test_healthz():
+def test_healthz(client):
     r = client.get("/healthz")
     assert r.status_code == 200
     assert r.json() == {"status": "ok"}
 
 
-def test_readyz():
+def test_readyz(client):
     assert client.get("/readyz").json() == {"status": "ready"}

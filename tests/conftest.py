@@ -10,7 +10,8 @@ ADMIN = {"Authorization": f"Bearer {ADMIN_KEY}"}
 
 @pytest.fixture
 def client():
-    return TestClient(create_app(Settings(admin_key=ADMIN_KEY, _env_file=None)))
+    settings = Settings(admin_key=ADMIN_KEY, database_url="sqlite://", _env_file=None)
+    return TestClient(create_app(settings))
 
 
 @pytest.fixture
