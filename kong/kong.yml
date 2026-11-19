@@ -1,0 +1,33 @@
+_format_version: "3.0"
+
+services:
+  - name: dwarpal-gateway
+    url: http://gateway:8000
+    connect_timeout: 5000
+    read_timeout: 120000
+    write_timeout: 120000
+    retries: 0                      # never retry POSTs: a retry would bill the LLM twice
+    routes:
+      - name: openai-compatible-api
+        paths: ["/v1"]
+        strip_path: false
+        methods: ["GET", "POST"]
+        request_buffering: false
+        response_buffering: false   # required so SSE tokens reach the client immediately
+        plugins:
+          - name: request-size-limiting
+            config:
+              allowed_payload_size: 1
+              size_unit: megabytes
+          - name: rate-limiting
+            config:
+              minute: 120
+              limit_by: header
+              header_name: authorization
+              policy: local
+              fault_tolerant: true
+      - name: health
+        paths: ["/healthz"]
+        strip_path: false
+        methods: ["GET"]
+    # No route for /admin, /docs or /openapi.json: they do not exist at the public edge.
