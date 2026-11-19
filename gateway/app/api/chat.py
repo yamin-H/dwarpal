@@ -2,9 +2,6 @@ import json
 import time
 import uuid
 
-from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
@@ -30,8 +27,14 @@ def _chunk(cid: str, created: int, model: str, delta: dict, finish: str | None =
 
 async def _sse(provider: Provider, req: ChatRequest, cid: str, created: int):
     yield _chunk(cid, created, req.model, {"role": "assistant"})
-    async for piece in provider.stream(req):
-        yield _chunk(cid, created, req.model, {"content": piece})
+    try:
+        async for piece in provider.stream(req):
+            yield _chunk(cid, created, req.model, {"content": piece})
+    except ApiError as exc:
+        err = {"error": {"message": exc.message, "type": exc.type_, "code": exc.code}}
+        yield f"data: {json.dumps(err)}\n\n"
+        yield "data: [DONE]\n\n"
+        return
     yield _chunk(cid, created, req.model, {}, finish="stop")
     yield "data: [DONE]\n\n"
 
@@ -47,7 +50,9 @@ async def chat_completions(
         )
     provider = get_provider(req.model, request.app.state.settings)
     cid, created = f"chatcmpl-{uuid.uuid4().hex[:24]}", int(time.time())
-    # ...rest of the function stays exactly the same
+
+    if req.stream:
+        return StreamingResponse(_sse(provider, req, cid, created), media_type="text/event-stream")
 
     completion = await provider.complete(req)
     return {

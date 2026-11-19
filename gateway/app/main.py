@@ -1,10 +1,11 @@
 from fastapi import FastAPI
-
+from dotenv import load_dotenv
 from app.api import admin, chat, health
 from app.config import Settings, get_settings
 from app.core.errors import register_error_handlers
 from app.core.tenants import Store
 
+load_dotenv()
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Dwarpal", version="0.2.0")

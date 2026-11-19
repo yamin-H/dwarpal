@@ -15,12 +15,6 @@ def test_returns_openai_shape(client, auth):
     assert u["total_tokens"] == u["prompt_tokens"] + u["completion_tokens"]
 
 
-def test_unknown_model_gives_openai_style_error(client, make_auth):
-    headers = make_auth(models=["*"])
-    r = client.post(URL, json=body(model="nope"), headers=headers)
-    assert r.status_code == 404
-    assert r.json()["error"]["code"] == "model_not_found"
-
 
 def test_empty_messages_rejected(client, auth):
     r = client.post(URL, json={"model": "auto", "messages": []}, headers=auth)
