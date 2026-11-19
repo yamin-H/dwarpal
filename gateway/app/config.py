@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     app_env: str = "dev"
     mock_delay_ms: int = 0
+    admin_key: str = ""  # empty = admin API disabled
 
 
 @lru_cache
