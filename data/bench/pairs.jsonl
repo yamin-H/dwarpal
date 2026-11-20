@@ -1,0 +1,24 @@
+{"a": "যাকাত কত টাকা দিতে হয়?", "b": "যাকাতের পরিমাণ কত?", "label": "same", "lang": "bn"}
+{"a": "zakat koto taka dite hoy", "b": "যাকাত কত টাকা দিতে হয়", "label": "same", "lang": "mixed"}
+{"a": "How much zakat do I have to pay?", "b": "What is the amount of zakat I must give?", "label": "same", "lang": "en"}
+{"a": "ফজরের নামাজ কয় রাকাত?", "b": "ফজরের নামাজ কত রাকাত?", "label": "same", "lang": "bn"}
+{"a": "fajr namaz koy rakat", "b": "ফজরের নামাজ কত রাকাত", "label": "same", "lang": "mixed"}
+{"a": "How many rakats are in Fajr prayer?", "b": "Number of rakats in the Fajr prayer?", "label": "same", "lang": "en"}
+{"a": "রোজা ভাঙার দোয়া কী?", "b": "ইফতারের দোয়া কী?", "label": "same", "lang": "bn"}
+{"a": "পাসওয়ার্ড ভুলে গেলে কী করব?", "b": "পাসওয়ার্ড রিসেট করব কীভাবে?", "label": "same", "lang": "bn"}
+{"a": "How to reset my app password?", "b": "I forgot my password, how can I reset it?", "label": "same", "lang": "en"}
+{"a": "ক্রেডিট কার্ড বিল কীভাবে পরিশোধ করব?", "b": "credit card bill kivabe pay korbo", "label": "same", "lang": "mixed"}
+{"a": "wudu korar niyom ki", "b": "অজু করার নিয়ম কী?", "label": "same", "lang": "mixed"}
+{"a": "How do I download a song for offline listening?", "b": "How can I save a song to listen offline?", "label": "same", "lang": "en"}
+{"a": "স্বর্ণের যাকাত কত?", "b": "রূপার যাকাত কত?", "label": "different", "lang": "bn"}
+{"a": "zakat on gold", "b": "zakat on silver", "label": "different", "lang": "en"}
+{"a": "ফজরের নামাজ কত রাকাত?", "b": "ইশার নামাজ কত রাকাত?", "label": "different", "lang": "bn"}
+{"a": "How many rakats in Fajr?", "b": "How many rakats in Maghrib?", "label": "different", "lang": "en"}
+{"a": "ইফতারের দোয়া কী?", "b": "সাহরির দোয়া কী?", "label": "different", "lang": "bn"}
+{"a": "How do I reset my password?", "b": "How do I reset my PIN?", "label": "different", "lang": "en"}
+{"a": "ক্রেডিট কার্ড চালু করব কীভাবে?", "b": "ক্রেডিট কার্ড বন্ধ করব কীভাবে?", "label": "different", "lang": "bn"}
+{"a": "অজু ভাঙার কারণ কী?", "b": "অজু করার নিয়ম কী?", "label": "different", "lang": "bn"}
+{"a": "How to download a song?", "b": "How to delete a downloaded song?", "label": "different", "lang": "en"}
+{"a": "Can I pay zakat in advance?", "b": "Can I pay zakat to my parents?", "label": "different", "lang": "en"}
+{"a": "সফরে নামাজ কীভাবে পড়ব?", "b": "অসুস্থ অবস্থায় নামাজ কীভাবে পড়ব?", "label": "different", "lang": "bn"}
+{"a": "How do I increase my card limit?", "b": "How do I decrease my card limit?", "label": "different", "lang": "en"}

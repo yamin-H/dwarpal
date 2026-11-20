@@ -11,7 +11,7 @@ EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 # Answers to these change over time. A false skip only costs money;
 # a stale cached answer costs trust. Skipping is the safe direction.
 TIME_WORDS = {
-    "today", "tonight", "now", "current", "currently", "latest", "tomorrow", "yesterday",
+    "today", "today's", "tonight", "now", "current", "currently", "latest", "tomorrow", "yesterday",
     "ajke", "aj", "ajker", "ekhon", "kal",
     "আজ", "আজকে", "আজকের", "এখন", "বর্তমান", "আগামীকাল", "গতকাল", "কাল",
 }
