@@ -39,3 +39,11 @@ def test_oversized_payload_is_rejected_by_kong():
 
 def test_metrics_are_not_exposed_at_the_edge():
     assert httpx.get(f"{BASE}/metrics").status_code == 404
+
+
+def test_playground_is_404_or_served_but_never_a_gateway_error():
+    assert httpx.get(f"{BASE}/playground").status_code in (200, 404)
+
+
+def test_console_is_not_exposed_at_the_edge():
+    assert httpx.get(f"{BASE}/console").status_code == 404

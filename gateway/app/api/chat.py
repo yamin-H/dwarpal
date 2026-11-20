@@ -229,12 +229,6 @@ async def chat_completions(
             await semantic.store(tenant.id, req, vector, entry)
 
     if hit:
-        try:
-            await enforce_budget(request.app.state.store, request.app.state.prices, tenant, req.model)
-        except BudgetError as exc:
-            request.app.state.metrics.budget_rejected(tenant.id, exc.kind)
-            log.warning("budget rejection", extra={"tenant": tenant.id, "kind": exc.kind})
-            raise
         source = "cache:semantic" if hit_score is not None else "cache"
         record = UsageRecorder(request, tenant, req, source, served_cache)
         headers = {"X-Cache": hit_status}
@@ -248,6 +242,13 @@ async def chat_completions(
             )
         await record("ok", 0, 0)
         return JSONResponse(_completion_body(cid, created, req.model, hit), headers=headers)
+
+    try:
+        await enforce_budget(request.app.state.store, request.app.state.prices, tenant, req.model)
+    except BudgetError as exc:
+        request.app.state.metrics.budget_rejected(tenant.id, exc.kind)
+        log.warning("budget rejection", extra={"tenant": tenant.id, "kind": exc.kind})
+        raise
 
     record = UsageRecorder(request, tenant, req, provider, served_cache)
     headers = {"X-Cache": cache_status}

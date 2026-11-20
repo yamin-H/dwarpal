@@ -25,3 +25,41 @@ def recommend(rows: list[dict], max_wrong_rate: float = 0.0) -> float | None:
     """Lowest threshold (so the highest hit rate) whose wrong-hit rate is acceptable."""
     ok = [r["threshold"] for r in rows if r["wrong_hit_rate"] <= max_wrong_rate]
     return min(ok) if ok else None
+
+
+
+def separation_margin(same_scores: list[float], diff_scores: list[float]) -> float | None:
+    """Lowest paraphrase similarity minus highest near-miss similarity.
+    Positive means some threshold separates the two groups perfectly on this data."""
+    if not same_scores or not diff_scores:
+        return None
+    return min(same_scores) - max(diff_scores)
+
+
+def validate_pairs(pairs: list) -> list[str]:
+    """Return problems found in a labeled pairs file. One label typo can skew a threshold."""
+    errors: list[str] = []
+    seen: dict[frozenset, tuple[str, int]] = {}
+    for i, p in enumerate(pairs, start=1):
+        where = f"pair {i}"
+        if not isinstance(p, dict):
+            errors.append(f"{where}: not an object")
+            continue
+        a, b, label = p.get("a"), p.get("b"), p.get("label")
+        if not isinstance(a, str) or not isinstance(b, str) or not a.strip() or not b.strip():
+            errors.append(f"{where}: 'a' and 'b' must be non-empty strings")
+            continue
+        if label not in ("same", "different"):
+            errors.append(f"{where}: label must be 'same' or 'different', got {label!r}")
+            continue
+        if a.strip() == b.strip():
+            errors.append(f"{where}: both texts are identical")
+            continue
+        key = frozenset((a.strip(), b.strip()))
+        if key in seen:
+            prev_label, prev_index = seen[key]
+            problem = "contradicts" if prev_label != label else "duplicates"
+            errors.append(f"{where}: {problem} pair {prev_index}")
+        else:
+            seen[key] = (label, i)
+    return errors

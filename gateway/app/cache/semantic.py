@@ -10,6 +10,7 @@ from qdrant_client import models as qm
 
 from app.api.schemas import ChatRequest
 from app.cache.exact import CachedCompletion
+from app.core.errors import ApiError
 
 log = logging.getLogger("dwarpal")
 COLLECTION = "dwarpal_semantic"
@@ -53,6 +54,12 @@ class NullSemanticCache:
 
     async def store(self, tenant_id, req, vector, completion) -> None:
         return None
+
+    async def ping(self) -> str:
+        return "disabled"
+
+    async def purge_tenant(self, tenant_id: str) -> bool:
+        return False
 
 
 class SemanticCache:
@@ -147,3 +154,25 @@ class SemanticCache:
             )
         except Exception:
             log.warning("semantic store failed", exc_info=True)
+
+    async def ping(self) -> str:
+        try:
+            await self.client.get_collections()
+            return "ok"
+        except Exception:
+            return "down"
+
+    async def purge_tenant(self, tenant_id: str) -> bool:
+        try:
+            if not await self.client.collection_exists(self.collection):
+                return True  # nothing was ever stored
+            await self.client.delete(
+                collection_name=self.collection,
+                points_selector=qm.FilterSelector(filter=qm.Filter(must=[
+                    qm.FieldCondition(key="tenant_id", match=qm.MatchValue(value=tenant_id))
+                ])),
+            )
+        except Exception as exc:
+            log.warning("semantic purge failed", exc_info=True)
+            raise ApiError(503, "Cache is unavailable.", "cache_unavailable", "api_error") from exc
+        return True

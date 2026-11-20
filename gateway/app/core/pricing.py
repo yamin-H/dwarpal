@@ -30,6 +30,12 @@ class PriceTable:
             + max(completion_tokens, 0) * price.output_per_million
         )
 
+    def table(self) -> dict[str, dict[str, float]]:
+        return {
+            m: {"input_per_million": p.input_per_million, "output_per_million": p.output_per_million}
+            for m, p in sorted(self._prices.items())
+        }
+
 
 def load_price_table(path: str) -> PriceTable:
     if not path:

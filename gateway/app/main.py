@@ -4,7 +4,7 @@ import redis.asyncio as aioredis
 from dotenv import load_dotenv
 from fastapi import FastAPI
 
-from app.api import admin, chat, health
+from app.api import admin, chat, console, health, playground
 from app.api import metrics as metrics_api
 from app.cache.exact import NullCache, RedisCache
 from app.cache.factory import build_semantic_cache
@@ -19,7 +19,6 @@ from app.observability.metrics import Metrics
 from app.observability.middleware import RequestContextMiddleware
 from app.routing.providers import get_provider
 from app.routing.router import Router, load_routing_config
-
 load_dotenv()
 
 
@@ -66,4 +65,11 @@ def create_app(
     app.include_router(metrics_api.router)
     app.include_router(chat.router)
     app.include_router(admin.router)
+    if settings.playground_enabled:
+        app.include_router(playground.router)
+    if settings.console_enabled:
+        app.include_router(console.router)
+        logging.getLogger("dwarpal").warning(
+            "admin console is enabled: reachable only on the direct gateway port, never expose it"
+        )
     return app

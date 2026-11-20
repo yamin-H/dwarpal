@@ -1,0 +1,7 @@
+{
+  "_note": "PLACEHOLDER prices in USD per million tokens. Check each provider's pricing page.",
+  "per_million_tokens": {
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gemini/gemini-2.0-flash": {"input": 0.10, "output": 0.40}
+  }
+}

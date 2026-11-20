@@ -12,6 +12,7 @@ RUN if [ "$INSTALL_ML" = "true" ]; then \
       python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${EMBEDDING_MODEL}')"; \
     fi
 COPY gateway/ ./gateway/
+COPY ui/ ./ui/
 RUN useradd --create-home app && mkdir -p /opt/hf && chown -R app /srv /opt/hf
 USER app
 EXPOSE 8000

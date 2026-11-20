@@ -30,6 +30,8 @@ services:
       DWARPAL_DATABASE_URL: postgresql+psycopg://dwarpal:${POSTGRES_PASSWORD:-dwarpal_dev}@postgres:5432/dwarpal
       DWARPAL_MOCK_DELAY_MS: ${DWARPAL_MOCK_DELAY_MS:-0}
       DWARPAL_REDIS_URL: redis://:${REDIS_PASSWORD:-dwarpal_dev}@redis:6379/0
+      DWARPAL_PLAYGROUND_ENABLED: ${DWARPAL_PLAYGROUND_ENABLED:-false}
+      DWARPAL_CONSOLE_ENABLED: ${DWARPAL_CONSOLE_ENABLED:-false}
     volumes:
       - ./config:/srv/config:ro
     depends_on:

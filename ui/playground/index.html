@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dwarpal playground</title>
+  <link rel="stylesheet" href="/playground/style.css">
+</head>
+<body>
+  <header>
+    <h1>Dwarpal playground</h1>
+    <p class="note">Demo only. API keys stay in this page's memory and are lost on reload.</p>
+  </header>
+  <main>
+    <section class="panel" aria-label="Tenants">
+      <h2>Tenants</h2>
+      <div class="row">
+        <input id="label" placeholder="Label, e.g. islamic-app" autocomplete="off">
+        <input id="key" type="password" placeholder="API key (dk_live_...)" autocomplete="off">
+        <button id="add" type="button">Add</button>
+      </div>
+      <label>Active tenant <select id="tenant"></select></label>
+    </section>
+    <section class="panel" aria-label="Ask">
+      <h2>Ask</h2>
+      <div class="row">
+        <label>Model <input id="model" value="auto"></label>
+        <label><input id="stream" type="checkbox" checked> Stream</label>
+        <label><input id="bypass" type="checkbox"> Bypass cache</label>
+      </div>
+      <textarea id="prompt" rows="3" placeholder="Ask in Bangla, English or Banglish (Ctrl+Enter sends)"></textarea>
+      <button id="send" type="button">Send</button>
+    </section>
+    <section id="log" aria-live="polite"></section>
+  </main>
+  <script src="/playground/app.js"></script>
+</body>
+</html>

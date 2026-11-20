@@ -4,6 +4,7 @@ import logging
 from dataclasses import asdict, dataclass
 
 from app.api.schemas import ChatRequest
+from app.core.errors import ApiError
 
 log = logging.getLogger("dwarpal")
 
@@ -37,6 +38,12 @@ class NullCache:
     async def set(self, key: str, value: CachedCompletion) -> None:
         return None
 
+    async def ping(self) -> str:
+        return "disabled"
+
+    async def purge_tenant(self, tenant_id: str) -> int:
+        return 0
+
 
 class MemoryCache:
     """Dict-backed cache for tests and local runs without Redis. No TTL."""
@@ -51,6 +58,16 @@ class MemoryCache:
 
     async def set(self, key: str, value: CachedCompletion) -> None:
         self._data[key] = value
+
+    async def ping(self) -> str:
+        return "ok"
+
+    async def purge_tenant(self, tenant_id: str) -> int:
+        prefix = f"cache:v1:{tenant_id}:"
+        keys = [k for k in self._data if k.startswith(prefix)]
+        for k in keys:
+            del self._data[k]
+        return len(keys)
 
 
 class RedisCache:
@@ -73,3 +90,26 @@ class RedisCache:
             await self.client.set(key, json.dumps(asdict(value), ensure_ascii=False), ex=self.ttl)
         except Exception:
             log.warning("cache set failed", exc_info=True)
+
+    async def ping(self) -> str:
+        try:
+            await self.client.ping()
+            return "ok"
+        except Exception:
+            return "down"
+
+    async def purge_tenant(self, tenant_id: str) -> int:
+        pattern = f"cache:v1:{tenant_id}:*"
+        deleted, batch = 0, []
+        try:
+            async for key in self.client.scan_iter(match=pattern, count=500):
+                batch.append(key)
+                if len(batch) >= 500:
+                    deleted += await self.client.delete(*batch)
+                    batch = []
+            if batch:
+                deleted += await self.client.delete(*batch)
+        except Exception as exc:
+            log.warning("cache purge failed", exc_info=True)
+            raise ApiError(503, "Cache is unavailable.", "cache_unavailable", "api_error") from exc
+        return deleted

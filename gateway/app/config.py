@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     log_tracebacks: bool = False   # provider error messages can contain secrets
     auto_migrate: bool = True
     prices_config: str = ""   # path to a price JSON file; empty = only the free mock models
+    playground_enabled: bool = False   # demo UI. Keep off in production.
+    console_enabled: bool = False   # admin UI at /console. Never expose publicly.
 
 
 @lru_cache

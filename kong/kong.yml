@@ -35,4 +35,8 @@ services:
         paths: ["/healthz"]
         strip_path: false
         methods: ["GET"]
+      - name: playground
+        paths: ["/playground"]
+        strip_path: false
+        methods: ["GET"]
     # No route for /admin, /docs or /openapi.json: they do not exist at the public edge.

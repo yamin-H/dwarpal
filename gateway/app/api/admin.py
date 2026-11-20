@@ -1,9 +1,14 @@
-from fastapi import APIRouter, Depends, Request
+import os
+
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, model_validator
 
 from app.core.auth import require_admin
 from app.core.errors import ApiError
-from app.core.tenants import DEFAULT_MODELS, Tenant, TenantExists, TenantNotFound
+from app.core.tenants import (
+    DEFAULT_MODELS, KeyNotFound, KeyNotRotatable, Tenant, TenantExists, TenantNotFound,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -119,3 +124,112 @@ def tenant_usage(tenant_id: str, request: Request):
         return request.app.state.store.usage_summary(tenant_id)
     except TenantNotFound:
         raise ApiError(404, "Tenant not found.", "tenant_not_found") from None
+
+
+MAX_OVERLAP_SECONDS = 7 * 24 * 3600
+
+
+class RotateRequest(BaseModel):
+    overlap_seconds: int = Field(default=24 * 3600, ge=0, le=MAX_OVERLAP_SECONDS)
+
+
+@router.post("/keys/{key_id}/rotate", status_code=201)
+def rotate_key(key_id: str, request: Request, body: RotateRequest = RotateRequest()):
+    try:
+        raw, rec, expires = request.app.state.store.rotate_key(key_id, body.overlap_seconds)
+    except KeyNotFound:
+        raise ApiError(404, "Key not found.", "key_not_found") from None
+    except KeyNotRotatable as exc:
+        raise ApiError(409, f"Key cannot be rotated: {exc}.", "key_not_rotatable") from None
+    return {
+        "key_id": rec.id,
+        "api_key": raw,
+        "prefix": rec.prefix,
+        "old_key_id": key_id,
+        "old_key_expires_at": expires.isoformat(),
+        "note": "Store this key now. The old key stops working at the time shown.",
+    }
+
+
+@router.get("/tenants/{tenant_id}/keys")
+def list_keys(tenant_id: str, request: Request):
+    try:
+        return {"keys": request.app.state.store.list_keys(tenant_id)}
+    except TenantNotFound:
+        raise ApiError(404, "Tenant not found.", "tenant_not_found") from None
+
+
+PROVIDER_KEY_NAMES = ("OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY")
+
+
+@router.get("/tenants")
+def list_tenants(request: Request):
+    return {"tenants": [
+        {**tenant_view(tenant), **stats}
+        for tenant, stats in request.app.state.store.list_tenants()
+    ]}
+
+
+@router.get("/overview")
+def overview(request: Request, hours: int = Query(24, ge=1, le=168)):
+    return request.app.state.store.overview(hours)
+
+
+@router.get("/requests")
+def request_log(
+    request: Request,
+    tenant_id: str | None = Query(None, max_length=40),
+    status: str | None = Query(None, pattern="^(ok|error)$"),
+    limit: int = Query(50, ge=1, le=200),
+    before_id: int | None = Query(None, ge=1),
+):
+    rows = request.app.state.store.recent_requests(tenant_id, status, limit, before_id)
+    return {"requests": rows, "next_before_id": rows[-1]["id"] if len(rows) == limit else None}
+
+
+@router.get("/system")
+async def system(request: Request):
+    """Everything here is safe to show: booleans and names only, never keys or URLs."""
+    st = request.app.state
+    settings, semantic, route = st.settings, st.semantic, st.router
+    return {
+        "version": request.app.version,
+        "environment": settings.app_env,
+        "checks": {
+            "database": await run_in_threadpool(st.store.ping),
+            "redis": await st.cache.ping(),
+            "qdrant": await semantic.ping(),
+        },
+        "cache": {
+            "exact_enabled": st.cache.enabled,
+            "semantic_enabled": semantic.enabled,
+            "ttl_seconds": settings.cache_ttl_seconds,
+            "semantic_threshold": getattr(semantic, "threshold", None),
+            "embedder": settings.embedder if semantic.enabled else None,
+            "embedding_model": settings.embedding_model if semantic.enabled else None,
+        },
+        "routing": {
+            "chains": route.config.chains,
+            "cooldown_seconds": route.config.cooldown_seconds,
+            "failure_threshold": route.config.failure_threshold,
+            "circuits": route.health.snapshot(),
+        },
+        "prices": st.prices.table(),
+        "providers_configured": {name: bool(os.environ.get(name)) for name in PROVIDER_KEY_NAMES},
+        "features": {
+            "console": settings.console_enabled,
+            "playground": settings.playground_enabled,
+            "auto_migrate": settings.auto_migrate,
+        },
+    }
+
+
+@router.delete("/tenants/{tenant_id}/cache")
+async def purge_tenant_cache(tenant_id: str, request: Request):
+    try:
+        request.app.state.store.get_tenant(tenant_id)
+    except TenantNotFound:
+        raise ApiError(404, "Tenant not found.", "tenant_not_found") from None
+    exact = await request.app.state.cache.purge_tenant(tenant_id)
+    semantic = await request.app.state.semantic.purge_tenant(tenant_id)
+    return {"exact_deleted": exact, "semantic_cleared": semantic}
