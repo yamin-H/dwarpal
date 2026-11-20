@@ -23,6 +23,7 @@ services:
         EMBEDDING_MODEL: ${DWARPAL_EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
     env_file: .env
     environment:
+      DWARPAL_PRICES_CONFIG: ${DWARPAL_PRICES_CONFIG:-}
       DWARPAL_ROUTING_CONFIG: ${DWARPAL_ROUTING_CONFIG:-}
       DWARPAL_QDRANT_URL: http://qdrant:6333
       DWARPAL_QDRANT_API_KEY: ${QDRANT_API_KEY:-dwarpal_dev}
@@ -44,6 +45,7 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
       interval: 5s
       retries: 10
+      start_period: 90s
 
   kong:
     image: kong:3.7

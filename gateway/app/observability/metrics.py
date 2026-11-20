@@ -51,6 +51,14 @@ class Metrics:
         self._http = Counter(
             "dwarpal_http_responses_total", "HTTP responses by status class",
             ["status_class"], registry=reg)
+        self._cost = Counter(
+            "dwarpal_cost_usd_total", "Estimated spend in USD", ["tenant"], registry=reg)
+        self._unpriced = Counter(
+            "dwarpal_unpriced_requests_total", "Requests served by a model with no price",
+            ["model"], registry=reg)
+        self._budget_rejections = Counter(
+            "dwarpal_budget_rejections_total", "Requests rejected by a tenant budget",
+            ["tenant", "kind"], registry=reg)
 
     def _bounded(self, kind: str, value: str) -> str:
         """Cap label cardinality: a tenant allowed '*' must not be able to mint unlimited series."""
@@ -63,13 +71,20 @@ class Metrics:
         return "other"
 
     def observe_request(self, *, tenant, model, status, cache, duration_s,
-                        prompt_tokens, completion_tokens) -> None:
+                        prompt_tokens, completion_tokens, cost_usd: float = 0.0) -> None:
         self._requests.labels(
             tenant=tenant, model=self._bounded("model", model), status=status, cache=cache
         ).inc()
         self._duration.labels(cache=cache).observe(duration_s)
         self._tokens.labels(tenant=tenant, type="prompt").inc(max(prompt_tokens, 0))
         self._tokens.labels(tenant=tenant, type="completion").inc(max(completion_tokens, 0))
+        self._cost.labels(tenant=tenant).inc(max(cost_usd, 0.0))
+
+    def unpriced(self, model: str) -> None:
+        self._unpriced.labels(model=self._bounded("model", model)).inc()
+
+    def budget_rejected(self, tenant: str, kind: str) -> None:
+        self._budget_rejections.labels(tenant=tenant, kind=kind).inc()
 
     def observe_ttft(self, source: str, seconds: float) -> None:
         self._ttft.labels(source=self._bounded("provider", source)).observe(seconds)

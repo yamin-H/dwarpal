@@ -132,7 +132,7 @@ class Store:
 
     def record_usage(
         self, *, tenant_id, model, provider, stream, status,
-        prompt_tokens, completion_tokens, latency_ms,
+        prompt_tokens, completion_tokens, latency_ms, cost_micros=0, served_model=None,
     ) -> None:
         with self._sf() as s:
             s.add(
@@ -140,15 +140,36 @@ class Store:
                     tenant_id=tenant_id, model=model, provider=provider, stream=stream,
                     status=status, prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens, latency_ms=latency_ms,
+                    cost_micros=cost_micros, served_model=served_model,
+                    created_at=self._clock(),
                 )
             )
             s.commit()
 
+    def month_usage(self, tenant_id: str) -> tuple[int, int]:
+        """Successful tokens and cost (micro-USD) since the start of the current UTC month."""
+        start = self._clock().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        with self._sf() as s:
+            tokens, cost = s.execute(
+                select(
+                    func.coalesce(func.sum(UsageRow.prompt_tokens + UsageRow.completion_tokens), 0),
+                    func.coalesce(func.sum(UsageRow.cost_micros), 0),
+                ).where(
+                    UsageRow.tenant_id == tenant_id,
+                    UsageRow.status == "ok",
+                    UsageRow.created_at >= start,
+                )
+            ).one()
+        return int(tokens), int(cost)
+
     def usage_summary(self, tenant_id: str) -> dict:
         with self._sf() as s:
-            if s.get(TenantRow, tenant_id) is None:
+            tenant = s.get(TenantRow, tenant_id)
+            if tenant is None:
                 raise TenantNotFound(tenant_id)
-            n, pt, ct, avg_ms, errs, hits, sem = s.execute(
+            token_budget = tenant.monthly_token_budget
+            cost_budget = tenant.monthly_cost_budget_micros
+            n, pt, ct, avg_ms, errs, hits, sem, cost = s.execute(
                 select(
                     func.count(UsageRow.id),
                     func.coalesce(func.sum(UsageRow.prompt_tokens), 0),
@@ -159,8 +180,10 @@ class Store:
                         func.sum(case((UsageRow.provider.like("cache%"), 1), else_=0)), 0),
                     func.coalesce(
                         func.sum(case((UsageRow.provider == "cache:semantic", 1), else_=0)), 0),
+                    func.coalesce(func.sum(UsageRow.cost_micros), 0),
                 ).where(UsageRow.tenant_id == tenant_id)
             ).one()
+        month_tokens, month_cost = self.month_usage(tenant_id)
         return {
             "requests": int(n),
             "prompt_tokens": int(pt),
@@ -171,4 +194,11 @@ class Store:
             "semantic_hits": int(sem),
             "cache_hit_rate": round(int(hits) / int(n), 3) if int(n) else 0.0,
             "avg_latency_ms": round(float(avg_ms), 1),
+            "cost_usd": round(int(cost) / 1_000_000, 6),
+            "month_to_date": {
+                "tokens": month_tokens,
+                "cost_usd": round(month_cost / 1_000_000, 6),
+                "token_budget": token_budget,
+                "cost_budget_usd": None if cost_budget is None else cost_budget / 1_000_000,
+            },
         }

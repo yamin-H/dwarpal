@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from app.core.budget import BudgetError, enforce_budget
 from app.api.schemas import ChatRequest
 from app.cache.exact import CachedCompletion, make_key
 from app.cache.policy import cache_decision
@@ -63,6 +64,7 @@ class UsageRecorder:
     def __init__(self, request: Request, tenant: Tenant, req: ChatRequest, source, cache: str):
         self.store = request.app.state.store
         self.metrics = request.app.state.metrics
+        self.prices = request.app.state.prices
         self.tenant, self.req, self.source, self.cache = tenant, req, source, cache
         self.start = time.perf_counter()
         self.prompt_estimate = sum(_tokens(m.content) for m in req.messages)
@@ -71,6 +73,10 @@ class UsageRecorder:
     @property
     def provider_name(self) -> str:
         return self.source if isinstance(self.source, str) else self.source.name
+
+    @property
+    def served_model(self) -> str | None:
+        return None if isinstance(self.source, str) else getattr(self.source, "served_model", None)
 
     def first_token(self) -> None:
         if self._first_token_seen:
@@ -81,15 +87,31 @@ class UsageRecorder:
         except Exception:
             log.exception("metrics failed")
 
+    def _cost_micros(self, status: str, prompt: int, completion: int) -> int:
+        model = self.served_model
+        if status != "ok" or model is None:  # errors are not billed; cache hits are free
+            return 0
+        cost = self.prices.cost_micros(model, prompt, completion)
+        if cost is None:
+            log.warning("unpriced model served", extra={"model": model})
+            try:
+                self.metrics.unpriced(model)
+            except Exception:
+                log.exception("metrics failed")
+            return 0
+        return cost
+
     async def __call__(
         self, status: str, prompt_tokens: int | None = None, completion_tokens: int = 0
     ) -> None:
         elapsed = time.perf_counter() - self.start
         prompt = self.prompt_estimate if prompt_tokens is None else prompt_tokens
+        cost = self._cost_micros(status, prompt, completion_tokens)
         try:  # metrics and usage logging must never break a request
             self.metrics.observe_request(
                 tenant=self.tenant.id, model=self.req.model, status=status, cache=self.cache,
                 duration_s=elapsed, prompt_tokens=prompt, completion_tokens=completion_tokens,
+                cost_usd=cost / 1_000_000,
             )
         except Exception:
             log.exception("metrics failed")
@@ -104,6 +126,8 @@ class UsageRecorder:
                 prompt_tokens=prompt,
                 completion_tokens=completion_tokens,
                 latency_ms=int(elapsed * 1000),
+                cost_micros=cost,
+                served_model=self.served_model,
             )
         except Exception:
             log.exception("usage logging failed")
@@ -205,6 +229,12 @@ async def chat_completions(
             await semantic.store(tenant.id, req, vector, entry)
 
     if hit:
+        try:
+            await enforce_budget(request.app.state.store, request.app.state.prices, tenant, req.model)
+        except BudgetError as exc:
+            request.app.state.metrics.budget_rejected(tenant.id, exc.kind)
+            log.warning("budget rejection", extra={"tenant": tenant.id, "kind": exc.kind})
+            raise
         source = "cache:semantic" if hit_score is not None else "cache"
         record = UsageRecorder(request, tenant, req, source, served_cache)
         headers = {"X-Cache": hit_status}

@@ -43,3 +43,17 @@ groups:
           severity: critical
         annotations:
           summary: "The gateway is returning 5xx responses"
+
+      - alert: TenantBudgetRejections
+        expr: sum by (tenant) (increase(dwarpal_budget_rejections_total[15m])) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "Tenant {{ $labels.tenant }} is being rejected by its budget"
+
+      - alert: UnpricedModelTraffic
+        expr: sum(increase(dwarpal_unpriced_requests_total[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "A model with no configured price is serving traffic (cost is undercounted)"

@@ -55,6 +55,16 @@
      "datasource": {"type": "prometheus", "uid": "prometheus"},
      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
-     "targets": [{"refId": "A", "expr": "sum by (status_class) (rate(dwarpal_http_responses_total[1m]))", "legendFormat": "{{status_class}}"}]}
+     "targets": [{"refId": "A", "expr": "sum by (status_class) (rate(dwarpal_http_responses_total[1m]))", "legendFormat": "{{status_class}}"}]},
+    {"id": 11, "type": "timeseries", "title": "Spend per hour by tenant (USD)",
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+     "fieldConfig": {"defaults": {"unit": "currencyUSD"}, "overrides": []},
+     "targets": [{"refId": "A", "expr": "sum by (tenant) (increase(dwarpal_cost_usd_total[1h]))", "legendFormat": "{{tenant}}"}]},
+    {"id": 12, "type": "timeseries", "title": "Budget rejections per second",
+     "datasource": {"type": "prometheus", "uid": "prometheus"},
+     "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+     "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+     "targets": [{"refId": "A", "expr": "sum by (tenant, kind) (rate(dwarpal_budget_rejections_total[1m]))", "legendFormat": "{{tenant}} {{kind}}"}]}
   ]
 }

@@ -51,3 +51,29 @@ def create_tenant(client, tenant_id="demo-app", **body):
 def chat(client, headers, text, model="auto", **extra):
     body = {"model": model, "messages": [{"role": "user", "content": text}], **extra}
     return client.post(URL, json=body, headers=headers)
+
+
+from datetime import datetime, timedelta, timezone
+
+
+class Clock:
+    def __init__(self, start=None):
+        self.t = start or datetime(2026, 11, 20, 12, 0, 0, tzinfo=timezone.utc)
+
+    def __call__(self):
+        return self.t
+
+    def advance(self, seconds):
+        self.t += timedelta(seconds=seconds)
+
+    def set(self, t):
+        self.t = t
+
+
+def make_store(clock=None):
+    from app.core.store import Store
+    from app.db.session import init_db, make_engine, make_session_factory
+
+    engine = make_engine("sqlite://")
+    init_db(engine)
+    return Store(make_session_factory(engine), clock=clock)
