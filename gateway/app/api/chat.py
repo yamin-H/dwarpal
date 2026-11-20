@@ -2,13 +2,14 @@ import json
 import logging
 import time
 import uuid
-from app.cache.policy import cache_decision
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.api.schemas import ChatRequest
 from app.cache.exact import CachedCompletion, make_key
+from app.cache.policy import cache_decision
 from app.cache.replay import replay_pieces
 from app.core.auth import require_tenant
 from app.core.errors import ApiError
@@ -112,7 +113,7 @@ async def _sse_replay(req: ChatRequest, cid: str, created: int, hit: CachedCompl
 
 @router.post("/chat/completions")
 async def chat_completions(
-    req: ChatRequest, request: Request, tenant: Tenant = Depends(require_tenant)
+    req: ChatRequest, request: Request, tenant: Tenant = Depends(require_tenant)  # noqa: B008
 ):
     if not tenant.allows(req.model):
         raise ApiError(
@@ -120,12 +121,12 @@ async def chat_completions(
             "model_not_allowed", "permission_error",
         )
     provider = get_provider(req.model, request.app.state.settings)
-    cache = request.app.state.cache
+    exact = request.app.state.cache
+    semantic = request.app.state.semantic
     bypass = request.headers.get("x-dwarpal-cache", "").lower() == "bypass"
     decision = cache_decision(req)
-    use_cache = cache.enabled and not bypass and decision.cacheable
-    cache_key = make_key(tenant.id, req) if use_cache else None
-    if not cache.enabled:
+
+    if not (exact.enabled or semantic.enabled):
         cache_status = "DISABLED"
     elif bypass:
         cache_status = "BYPASS"
@@ -133,20 +134,44 @@ async def chat_completions(
         cache_status = "SKIP"
     else:
         cache_status = "MISS"
+    use_cache = cache_status == "MISS"
+    exact_active = use_cache and exact.enabled
+    semantic_active = use_cache and semantic.enabled
+    cache_key = make_key(tenant.id, req) if exact_active else None
     cid, created = f"chatcmpl-{uuid.uuid4().hex[:24]}", int(time.time())
     prompt_estimate = sum(_tokens(m.content) for m in req.messages)
 
-    async def store(content, completion_tokens, prompt_tokens=None, finish="stop"):
-        if cache_key and content:
-            tokens_in = prompt_estimate if prompt_tokens is None else prompt_tokens
-            await cache.set(
-                cache_key, CachedCompletion(content, tokens_in, completion_tokens, finish)
-            )
+    hit, hit_status, hit_score, vector = None, "", None, None
+    if exact_active:
+        hit = await exact.get(cache_key)
+        hit_status = "HIT" if hit else ""
+    if hit is None and semantic_active:
+        found = await semantic.lookup(tenant.id, req)
+        vector = found.vector
+        if found.hit:
+            hit, hit_status, hit_score = found.hit, "HIT-SEMANTIC", found.score
+            if exact_active:
+                await exact.set(cache_key, hit)  # same phrasing next time skips the embedding
 
-    hit = await cache.get(cache_key) if cache_key else None
+    async def store(content, completion_tokens, prompt_tokens=None, finish="stop"):
+        if not content:
+            return
+        entry = CachedCompletion(
+            content, prompt_estimate if prompt_tokens is None else prompt_tokens,
+            completion_tokens, finish,
+        )
+        if exact_active:
+            await exact.set(cache_key, entry)
+        if semantic_active and vector is not None:
+            await semantic.store(tenant.id, req, vector, entry)
+
     if hit:
-        record = _usage_recorder(request, tenant, req, "cache")
-        headers = {"X-Cache": "HIT"}
+        record = _usage_recorder(
+            request, tenant, req, "cache:semantic" if hit_score is not None else "cache"
+        )
+        headers = {"X-Cache": hit_status}
+        if hit_score is not None:
+            headers["X-Cache-Score"] = f"{hit_score:.4f}"
         if req.stream:
             return StreamingResponse(
                 _sse_replay(req, cid, created, hit, record),

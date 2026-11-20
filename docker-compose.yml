@@ -18,8 +18,13 @@ services:
     build:
       context: .
       dockerfile: gateway/Dockerfile
+      args:
+        INSTALL_ML: ${INSTALL_ML:-false}
+        EMBEDDING_MODEL: ${DWARPAL_EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
     env_file: .env
     environment:
+      DWARPAL_QDRANT_URL: http://qdrant:6333
+      DWARPAL_QDRANT_API_KEY: ${QDRANT_API_KEY:-dwarpal_dev}
       DWARPAL_DATABASE_URL: postgresql+psycopg://dwarpal:${POSTGRES_PASSWORD:-dwarpal_dev}@postgres:5432/dwarpal
       DWARPAL_MOCK_DELAY_MS: ${DWARPAL_MOCK_DELAY_MS:-0}
       DWARPAL_REDIS_URL: redis://:${REDIS_PASSWORD:-dwarpal_dev}@redis:6379/0
@@ -28,6 +33,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_started
     ports:
       - "127.0.0.1:8001:8000"   # DEV ONLY: direct access for admin. Remove in production.
     healthcheck:
@@ -63,5 +70,14 @@ services:
       retries: 10
     # no published port: only the gateway can reach Redis
 
+  qdrant:
+    image: qdrant/qdrant:v1.12.4     # if this tag is not found, pin any current 1.12+ release
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-dwarpal_dev}
+    volumes:
+      - qdrant_data:/qdrant/storage
+    # no published port: only the gateway can reach it
+
 volumes:
   pgdata:
+  qdrant_data:

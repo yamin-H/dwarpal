@@ -1,8 +1,9 @@
 import hmac
-from app.core.tenants import Tenant
+
 from fastapi import Request
 
 from app.core.errors import ApiError
+from app.core.tenants import Tenant
 
 
 def bearer_token(request: Request) -> str | None:

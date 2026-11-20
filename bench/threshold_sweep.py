@@ -12,8 +12,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "gateway"))
 
-from app.cache.embedder import build_embedder  # noqa: E402
-from app.cache.evaluation import cosine, recommend, sweep, thresholds  # noqa: E402
+from app.cache.embedder import build_embedder
+from app.cache.evaluation import cosine, recommend, sweep, thresholds
 
 
 def load_pairs(path: str) -> list[dict]:
@@ -66,7 +66,7 @@ def main() -> int:
               "This model cannot separate your near-misses.")
         return 2
     print(f"\nRecommended threshold (wrong-hit rate <= {args.max_wrong}): {best}")
-    print(f"Hit rate at that threshold: {[r for r in rows if r['threshold'] == best][0]['hit_rate']:.2f}")
+    print(f"Hit rate at that threshold: {next(r for r in rows if r['threshold'] == best)['hit_rate']:.2f}")
     return 0
 
 

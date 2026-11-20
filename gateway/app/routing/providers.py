@@ -1,7 +1,8 @@
 import asyncio
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import AsyncIterator, Protocol
+from typing import Protocol
 
 import litellm
 

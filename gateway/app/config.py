@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./dwarpal.db"
     redis_url: str = ""          # empty = cache disabled
     cache_ttl_seconds: int = 3600
+    semantic_cache_enabled: bool = False
+    qdrant_url: str = ""          # ":memory:" runs Qdrant in-process (dev only)
+    qdrant_api_key: str = ""
+    embedder: str = "sentence-transformers"   # or "hash" (dev only, not semantic)
+    embedding_model: str = "intfloat/multilingual-e5-small"
+    embedding_prefix: str = "query:"
+    semantic_threshold: float = 0.95          # placeholder: pick yours with `make bench`
 
 
 @lru_cache

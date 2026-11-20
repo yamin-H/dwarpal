@@ -8,7 +8,7 @@ def cosine(a: list[float], b: list[float]) -> float:
 
 
 def thresholds(lo: float = 0.70, hi: float = 0.99, step: float = 0.01) -> list[float]:
-    return [round(lo + i * step, 4) for i in range(int(round((hi - lo) / step)) + 1)]
+    return [round(lo + i * step, 4) for i in range(round((hi - lo) / step) + 1)]
 
 
 def sweep(same_scores: list[float], diff_scores: list[float], ts: list[float]) -> list[dict]:
