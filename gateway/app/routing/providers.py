@@ -60,6 +60,18 @@ class MockProvider:
             yield word if i == 0 else " " + word
 
 
+class FailingMockProvider:
+    """DEV ONLY: always fails, so fallbacks can be demonstrated without real providers."""
+
+    name = "mock-fail"
+
+    async def complete(self, req: ChatRequest) -> Completion:
+        raise ApiError(502, "Upstream provider error.", "upstream_error", "api_error")
+
+    async def stream(self, req: ChatRequest) -> AsyncIterator[str]:
+        raise ApiError(502, "Upstream provider error.", "upstream_error", "api_error")
+        yield ""  # makes this an async generator
+
 def _upstream_error(exc: Exception) -> ApiError:
     log.exception("upstream provider failure: %s", type(exc).__name__)
     return ApiError(502, "Upstream provider error.", "upstream_error", "api_error")
@@ -109,4 +121,6 @@ class LiteLLMProvider:
 def get_provider(model: str, settings: Settings) -> Provider:
     if model in MOCK_MODELS:
         return MockProvider(settings.mock_delay_ms)
+    if model == "mock-fail" and settings.app_env != "prod":
+        return FailingMockProvider()
     return LiteLLMProvider(model)

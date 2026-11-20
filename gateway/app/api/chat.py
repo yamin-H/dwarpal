@@ -14,7 +14,7 @@ from app.cache.replay import replay_pieces
 from app.core.auth import require_tenant
 from app.core.errors import ApiError
 from app.core.tenants import Tenant
-from app.routing.providers import Provider, get_provider
+from app.routing.providers import Provider
 
 log = logging.getLogger("dwarpal")
 router = APIRouter(prefix="/v1", tags=["chat"])
@@ -68,7 +68,7 @@ def _usage_recorder(request: Request, tenant: Tenant, req: ChatRequest, provider
                 store.record_usage,
                 tenant_id=tenant.id,
                 model=req.model,
-                provider=provider_name,
+                provider=provider_name if isinstance(provider_name, str) else provider_name.name,
                 stream=req.stream,
                 status=status,
                 prompt_tokens=prompt_estimate if prompt_tokens is None else prompt_tokens,
@@ -120,7 +120,7 @@ async def chat_completions(
             403, f"Model '{req.model}' is not enabled for this tenant.",
             "model_not_allowed", "permission_error",
         )
-    provider = get_provider(req.model, request.app.state.settings)
+    provider = request.app.state.router.provider_for(req.model)
     exact = request.app.state.cache
     semantic = request.app.state.semantic
     bypass = request.headers.get("x-dwarpal-cache", "").lower() == "bypass"
@@ -181,7 +181,7 @@ async def chat_completions(
         await record("ok", 0, 0)
         return JSONResponse(_completion_body(cid, created, req.model, hit), headers=headers)
 
-    record = _usage_recorder(request, tenant, req, provider.name)
+    record = _usage_recorder(request, tenant, req, provider)
     headers = {"X-Cache": cache_status}
     if cache_status == "SKIP":
         headers["X-Cache-Reason"] = decision.reason
@@ -198,6 +198,7 @@ async def chat_completions(
         await record("error")
         raise
     await record("ok", completion.prompt_tokens, completion.completion_tokens)
+    headers["X-Provider"] = provider.name
     await store(
         completion.content, completion.completion_tokens,
         completion.prompt_tokens, completion.finish_reason,

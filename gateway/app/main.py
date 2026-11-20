@@ -1,7 +1,8 @@
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 from fastapi import FastAPI
-
+from app.routing.providers import get_provider
+from app.routing.router import Router, load_routing_config
 from app.api import admin, chat, health
 from app.cache.exact import NullCache, RedisCache
 from app.cache.factory import build_semantic_cache
@@ -13,7 +14,7 @@ from app.db.session import init_db, make_engine, make_session_factory
 load_dotenv()
 
 
-def create_app(settings: Settings | None = None, cache=None, semantic=None) -> FastAPI:
+def create_app(settings: Settings | None = None, cache=None, semantic=None, router=None) -> FastAPI:
     settings = settings or get_settings()
     engine = make_engine(settings.database_url)
     init_db(engine)
@@ -32,7 +33,14 @@ def create_app(settings: Settings | None = None, cache=None, semantic=None) -> F
     app.state.cache = cache
     app.state.semantic = semantic if semantic is not None else build_semantic_cache(settings)
     register_error_handlers(app)
+
     app.include_router(health.router)
     app.include_router(chat.router)
     app.include_router(admin.router)
+
+    app.state.router = router or Router(
+        lambda model: get_provider(model, settings), load_routing_config(settings.routing_config)
+    )
+
+
     return app

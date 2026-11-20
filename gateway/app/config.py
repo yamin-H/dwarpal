@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     embedder: str = "sentence-transformers"   # or "hash" (dev only, not semantic)
     embedding_model: str = "intfloat/multilingual-e5-small"
     embedding_prefix: str = "query:"
-    semantic_threshold: float = 0.95          # placeholder: pick yours with `make bench`
+    semantic_threshold: float = 0.95    
+    routing_config: str = ""   # path to a routing JSON file; empty = no fallbacks      # placeholder: pick yours with `make bench`
 
 
 @lru_cache
