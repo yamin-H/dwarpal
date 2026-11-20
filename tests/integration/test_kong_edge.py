@@ -36,3 +36,6 @@ def test_v1_requires_a_key_through_kong():
 def test_oversized_payload_is_rejected_by_kong():
     big = {"model": "auto", "messages": [{"role": "user", "content": "x" * 2_000_000}]}
     assert httpx.post(f"{BASE}/v1/chat/completions", json=big).status_code == 413
+
+def test_metrics_are_not_exposed_at_the_edge():
+    assert httpx.get(f"{BASE}/metrics").status_code == 404

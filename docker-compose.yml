@@ -23,11 +23,14 @@ services:
         EMBEDDING_MODEL: ${DWARPAL_EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
     env_file: .env
     environment:
+      DWARPAL_ROUTING_CONFIG: ${DWARPAL_ROUTING_CONFIG:-}
       DWARPAL_QDRANT_URL: http://qdrant:6333
       DWARPAL_QDRANT_API_KEY: ${QDRANT_API_KEY:-dwarpal_dev}
       DWARPAL_DATABASE_URL: postgresql+psycopg://dwarpal:${POSTGRES_PASSWORD:-dwarpal_dev}@postgres:5432/dwarpal
       DWARPAL_MOCK_DELAY_MS: ${DWARPAL_MOCK_DELAY_MS:-0}
       DWARPAL_REDIS_URL: redis://:${REDIS_PASSWORD:-dwarpal_dev}@redis:6379/0
+    volumes:
+      - ./config:/srv/config:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,6 +81,34 @@ services:
       - qdrant_data:/qdrant/storage
     # no published port: only the gateway can reach it
 
+  prometheus:
+    image: prom/prometheus:v2.53.0     # if the tag is not found, pin any current release
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.1.0      # if the tag is not found, pin any current release
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-change-me}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/etc/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+
 volumes:
   pgdata:
   qdrant_data:
+  prometheus_data:
