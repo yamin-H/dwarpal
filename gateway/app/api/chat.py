@@ -2,7 +2,7 @@ import json
 import logging
 import time
 import uuid
-
+from app.cache.policy import cache_decision
 from fastapi import APIRouter, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -122,12 +122,17 @@ async def chat_completions(
     provider = get_provider(req.model, request.app.state.settings)
     cache = request.app.state.cache
     bypass = request.headers.get("x-dwarpal-cache", "").lower() == "bypass"
-    use_cache = cache.enabled and not bypass
+    decision = cache_decision(req)
+    use_cache = cache.enabled and not bypass and decision.cacheable
     cache_key = make_key(tenant.id, req) if use_cache else None
     if not cache.enabled:
         cache_status = "DISABLED"
+    elif bypass:
+        cache_status = "BYPASS"
+    elif not decision.cacheable:
+        cache_status = "SKIP"
     else:
-        cache_status = "BYPASS" if bypass else "MISS"
+        cache_status = "MISS"
     cid, created = f"chatcmpl-{uuid.uuid4().hex[:24]}", int(time.time())
     prompt_estimate = sum(_tokens(m.content) for m in req.messages)
 
@@ -153,6 +158,8 @@ async def chat_completions(
 
     record = _usage_recorder(request, tenant, req, provider.name)
     headers = {"X-Cache": cache_status}
+    if cache_status == "SKIP":
+        headers["X-Cache-Reason"] = decision.reason
     if req.stream:
         return StreamingResponse(
             _sse(provider, req, cid, created, record, store),
