@@ -1,6 +1,10 @@
 from app.api.schemas import ChatRequest, Message
+from app.config import Settings
 from app.core.errors import ApiError
 from app.routing.providers import Completion
+
+ADMIN = {"Authorization": "Bearer test-admin-key"}
+URL = "/v1/chat/completions"
 
 
 class FakeProvider:
@@ -30,3 +34,20 @@ class FakeProvider:
 
 def make_req(model="m") -> ChatRequest:
     return ChatRequest(model=model, messages=[Message(role="user", content="hi")])
+
+
+def app_settings(**kw) -> Settings:
+    return Settings(admin_key="test-admin-key", database_url="sqlite://", _env_file=None, **kw)
+
+
+def create_tenant(client, tenant_id="demo-app", **body):
+    payload = {"id": tenant_id, "name": tenant_id, **body}
+    r = client.post("/admin/tenants", json=payload, headers=ADMIN)
+    assert r.status_code == 201, r.text
+    key = client.post(f"/admin/tenants/{tenant_id}/keys", headers=ADMIN).json()["api_key"]
+    return {"Authorization": f"Bearer {key}"}
+
+
+def chat(client, headers, text, model="auto", **extra):
+    body = {"model": model, "messages": [{"role": "user", "content": text}], **extra}
+    return client.post(URL, json=body, headers=headers)

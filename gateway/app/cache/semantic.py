@@ -48,7 +48,7 @@ class SemanticLookup:
 class NullSemanticCache:
     enabled = False
 
-    async def lookup(self, tenant_id: str, req: ChatRequest) -> SemanticLookup:
+    async def lookup(self, tenant_id: str, req: ChatRequest, threshold=None) -> SemanticLookup:
         return SemanticLookup()
 
     async def store(self, tenant_id, req, vector, completion) -> None:
@@ -97,7 +97,7 @@ class SemanticCache:
             qm.FieldCondition(key="created_at", range=qm.Range(gte=self.clock() - self.ttl)),
         ])
 
-    async def lookup(self, tenant_id: str, req: ChatRequest) -> SemanticLookup:
+    async def lookup(self, tenant_id: str, req: ChatRequest, threshold=None) -> SemanticLookup:
         if not eligible(req):
             return SemanticLookup()
         try:
@@ -108,7 +108,7 @@ class SemanticCache:
                 query=vector,
                 query_filter=self._filter(tenant_id, req),
                 limit=1,
-                score_threshold=self.threshold,
+                score_threshold=self.threshold if threshold is None else threshold,
                 with_payload=True,
             )
         except Exception:  # fail open: a broken semantic cache must never break requests

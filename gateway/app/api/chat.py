@@ -152,18 +152,23 @@ async def chat_completions(
             403, f"Model '{req.model}' is not enabled for this tenant.",
             "model_not_allowed", "permission_error",
         )
-    provider = request.app.state.router.provider_for(req.model)
+    provider = request.app.state.router.provider_for(
+        req.model, allow_fallback=tenant.allow_fallback
+    )
     exact = request.app.state.cache
     semantic = request.app.state.semantic
     bypass = request.headers.get("x-dwarpal-cache", "").lower() == "bypass"
     decision = cache_decision(req)
 
+    skip_reason = None
     if not (exact.enabled or semantic.enabled):
         cache_status = "DISABLED"
     elif bypass:
         cache_status = "BYPASS"
+    elif not tenant.cache_enabled:
+        cache_status, skip_reason = "SKIP", "tenant-policy"
     elif not decision.cacheable:
-        cache_status = "SKIP"
+        cache_status, skip_reason = "SKIP", decision.reason
     else:
         cache_status = "MISS"
     use_cache = cache_status == "MISS"
@@ -178,7 +183,7 @@ async def chat_completions(
         hit = await exact.get(cache_key)
         hit_status = "HIT" if hit else ""
     if hit is None and semantic_active:
-        found = await semantic.lookup(tenant.id, req)
+        found = await semantic.lookup(tenant.id, req, threshold=tenant.semantic_threshold)
         vector = found.vector
         if found.hit:
             hit, hit_status, hit_score = found.hit, "HIT-SEMANTIC", found.score
@@ -216,8 +221,8 @@ async def chat_completions(
 
     record = UsageRecorder(request, tenant, req, provider, served_cache)
     headers = {"X-Cache": cache_status}
-    if cache_status == "SKIP":
-        headers["X-Cache-Reason"] = decision.reason
+    if skip_reason:
+        headers["X-Cache-Reason"] = skip_reason
     if req.stream:
         return StreamingResponse(
             _sse(provider, req, cid, created, record, store),

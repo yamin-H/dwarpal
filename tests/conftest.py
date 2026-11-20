@@ -16,8 +16,8 @@ def client():
 
 @pytest.fixture
 def make_auth(client):
-    def _make(tenant_id="demo-app", models=None):
-        body = {"id": tenant_id, "name": tenant_id}
+    def _make(tenant_id="demo-app", models=None, **options):
+        body = {"id": tenant_id, "name": tenant_id, **options}
         if models is not None:
             body["allowed_models"] = models
         client.post("/admin/tenants", json=body, headers=ADMIN)
@@ -25,7 +25,6 @@ def make_auth(client):
         return {"Authorization": f"Bearer {key}"}
 
     return _make
-
 
 @pytest.fixture
 def auth(make_auth):

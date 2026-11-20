@@ -1,4 +1,5 @@
 import secrets
+from datetime import datetime, timezone
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -14,31 +15,81 @@ from app.core.tenants import (
 )
 from app.db.models import ApiKeyRow, TenantRow, UsageRow
 
+OPTION_FIELDS = {
+    "cache_enabled", "allow_fallback", "semantic_threshold",
+    "monthly_token_budget", "monthly_cost_budget_micros",
+}
+UPDATE_FIELDS = OPTION_FIELDS | {"name", "allowed_models", "active"}
+
+
+def _tenant(row: TenantRow) -> Tenant:
+    return Tenant(
+        id=row.id,
+        name=row.name,
+        allowed_models=list(row.allowed_models),
+        active=row.active,
+        cache_enabled=row.cache_enabled,
+        allow_fallback=row.allow_fallback,
+        semantic_threshold=row.semantic_threshold,
+        monthly_token_budget=row.monthly_token_budget,
+        monthly_cost_budget_micros=row.monthly_cost_budget_micros,
+    )
+
 
 class Store:
-    def __init__(self, session_factory) -> None:
+    def __init__(self, session_factory, clock=None) -> None:
         self._sf = session_factory
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
 
-    def create_tenant(self, tenant_id: str, name: str, allowed_models=None) -> Tenant:
+    def create_tenant(self, tenant_id: str, name: str, allowed_models=None, **options) -> Tenant:
         if not TENANT_ID_RE.match(tenant_id):
             raise ValueError("invalid tenant id")
+        unknown = set(options) - OPTION_FIELDS
+        if unknown:
+            raise ValueError(f"unknown tenant options: {sorted(unknown)}")
         models = list(allowed_models) if allowed_models else list(DEFAULT_MODELS)
+        row = TenantRow(
+            id=tenant_id,
+            name=name,
+            allowed_models=models,
+            active=True,
+            cache_enabled=options.get("cache_enabled", True),
+            allow_fallback=options.get("allow_fallback", True),
+            semantic_threshold=options.get("semantic_threshold"),
+            monthly_token_budget=options.get("monthly_token_budget"),
+            monthly_cost_budget_micros=options.get("monthly_cost_budget_micros"),
+        )
         with self._sf() as s:
-            s.add(TenantRow(id=tenant_id, name=name, allowed_models=models, active=True))
+            s.add(row)
             try:
                 s.commit()
             except IntegrityError:
                 s.rollback()
                 raise TenantExists(tenant_id) from None
-        return Tenant(tenant_id, name, models, True)
+            return _tenant(row)
 
-    def set_active(self, tenant_id: str, active: bool) -> None:
+    def get_tenant(self, tenant_id: str) -> Tenant:
         with self._sf() as s:
             row = s.get(TenantRow, tenant_id)
             if row is None:
                 raise TenantNotFound(tenant_id)
-            row.active = active
+            return _tenant(row)
+
+    def update_tenant(self, tenant_id: str, **changes) -> Tenant:
+        unknown = set(changes) - UPDATE_FIELDS
+        if unknown:
+            raise ValueError(f"unknown tenant fields: {sorted(unknown)}")
+        with self._sf() as s:
+            row = s.get(TenantRow, tenant_id)
+            if row is None:
+                raise TenantNotFound(tenant_id)
+            for key, value in changes.items():
+                setattr(row, key, list(value) if key == "allowed_models" else value)
             s.commit()
+            return _tenant(row)
+
+    def set_active(self, tenant_id: str, active: bool) -> None:
+        self.update_tenant(tenant_id, active=active)
 
     def issue_key(self, tenant_id: str) -> tuple[str, ApiKeyRecord]:
         raw = generate_key()
@@ -51,6 +102,7 @@ class Store:
                 key_hash=hash_key(raw),
                 prefix=raw[:12],
                 revoked=False,
+                created_at=self._clock(),
             )
             s.add(row)
             s.commit()
@@ -76,9 +128,7 @@ class Store:
                     TenantRow.active.is_(True),
                 )
             ).scalar_one_or_none()
-            if row is None:
-                return None
-            return Tenant(row.id, row.name, list(row.allowed_models), row.active)
+            return _tenant(row) if row else None
 
     def record_usage(
         self, *, tenant_id, model, provider, stream, status,

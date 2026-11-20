@@ -94,22 +94,23 @@ class Router:
             m for chain in self.config.chains.values() for m in chain
         }
 
-    def candidates(self, model: str) -> list[str]:
+    def candidates(self, model: str, allow_fallback: bool = True) -> list[str]:
+        chain = self.config.chains.get(model, []) if allow_fallback else []
         seen: set[str] = set()
         out: list[str] = []
-        for m in [model, *self.config.chains.get(model, [])]:
+        for m in [model, *chain]:
             if m not in seen:
                 seen.add(m)
                 out.append(m)
         return out
 
-    def order(self, model: str) -> list[str]:
-        cands = self.candidates(model)
+    def order(self, model: str, allow_fallback: bool = True) -> list[str]:
+        cands = self.candidates(model, allow_fallback)
         healthy = [m for m in cands if self.health.available(m)]
         return healthy or cands  # everything cooling down: fail open and try anyway
 
-    def provider_for(self, model: str) -> "RoutedProvider":
-        return RoutedProvider(self, model)
+    def provider_for(self, model: str, allow_fallback: bool = True) -> "RoutedProvider":
+        return RoutedProvider(self, model, allow_fallback)
 
     def record_success(self, key: str, provider_name: str) -> None:
         if key in self._tracked:
@@ -131,11 +132,13 @@ class Router:
 
 
 class RoutedProvider:
-    """Looks like a Provider to the chat endpoint; `name` is the provider that actually served."""
+    """Looks like a Provider to the chat endpoint. `name` and `served_model` always describe
+    the provider and model that actually served (or last attempted) the request."""
 
-    def __init__(self, router: Router, model: str) -> None:
-        self.router, self.model = router, model
+    def __init__(self, router: Router, model: str, allow_fallback: bool = True) -> None:
+        self.router, self.model, self.allow_fallback = router, model, allow_fallback
         self.name = router.factory(model).name
+        self.served_model = model
 
     def _log_fallback(self, served_by: str) -> None:
         if served_by != self.model:
@@ -145,9 +148,9 @@ class RoutedProvider:
 
     async def complete(self, req: ChatRequest) -> Completion:
         tried = 0
-        for cand in self.router.order(self.model):
+        for cand in self.router.order(self.model, self.allow_fallback):
             provider = self.router.factory(cand)
-            self.name = provider.name
+            self.name, self.served_model = provider.name, cand
             tried += 1
             try:
                 result = await provider.complete(req)
@@ -163,9 +166,9 @@ class RoutedProvider:
 
     async def stream(self, req: ChatRequest) -> AsyncIterator[str]:
         tried = 0
-        for cand in self.router.order(self.model):
+        for cand in self.router.order(self.model, self.allow_fallback):
             provider = self.router.factory(cand)
-            self.name = provider.name
+            self.name, self.served_model = provider.name, cand
             tried += 1
             it = provider.stream(req).__aiter__()
             try:
