@@ -1,0 +1,8 @@
+{
+  "chains": {
+    "mock-fail": ["mock-echo"],
+    "gpt-4o-mini": ["gemini/gemini-2.0-flash"]
+  },
+  "cooldown_seconds": 30,
+  "failure_threshold": 3
+}

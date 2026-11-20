@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_json: bool = True
     log_tracebacks: bool = False   # provider error messages can contain secrets
+    auto_migrate: bool = True
 
 
 @lru_cache

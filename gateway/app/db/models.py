@@ -1,11 +1,13 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import (
+    JSON, BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, text, true,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 def _now() -> datetime:
-    return datetime.now(UTC)
+    return datetime.now(timezone.utc)
 
 
 class Base(DeclarativeBase):
@@ -19,6 +21,11 @@ class TenantRow(Base):
     allowed_models: Mapped[list] = mapped_column(JSON)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    cache_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    allow_fallback: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    semantic_threshold: Mapped[float | None] = mapped_column(Float, nullable=True)
+    monthly_token_budget: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    monthly_cost_budget_micros: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
 
 
 class ApiKeyRow(Base):
@@ -29,6 +36,7 @@ class ApiKeyRow(Base):
     prefix: Mapped[str] = mapped_column(String(16))
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class UsageRow(Base):
@@ -45,3 +53,5 @@ class UsageRow(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_now, index=True
     )
+    cost_micros: Mapped[int] = mapped_column(BigInteger, default=0, server_default=text("0"))
+    served_model: Mapped[str | None] = mapped_column(String(100), nullable=True)

@@ -8,3 +8,4 @@ psycopg[binary]>=3.1
 redis>=5.0
 qdrant-client>=1.12
 prometheus-client>=0.20
+alembic>=1.13

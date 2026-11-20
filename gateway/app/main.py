@@ -1,7 +1,10 @@
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 from fastapi import FastAPI
+import logging
 
+from app.db.migrate import run_migrations
+from app.db.session import init_db, is_memory_sqlite, make_engine, make_session_factory
 from app.api import admin, chat, health
 from app.api import metrics as metrics_api
 from app.cache.exact import NullCache, RedisCache
@@ -25,7 +28,11 @@ def create_app(
     settings = settings or get_settings()
     configure_logging(settings.log_level, settings.log_json, settings.log_tracebacks)
     engine = make_engine(settings.database_url)
-    init_db(engine)
+    if is_memory_sqlite(settings.database_url):
+        init_db(engine)
+    elif settings.auto_migrate:
+        run_migrations(engine)
+        logging.getLogger("dwarpal").info("database migrations applied")
     if cache is None:
         if settings.redis_url:
             client = aioredis.from_url(
