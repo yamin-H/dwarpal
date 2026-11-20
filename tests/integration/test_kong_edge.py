@@ -20,6 +20,9 @@ def test_admin_is_not_routed_at_the_edge():
     )
     assert r.status_code == 404
 
+def test_request_id_is_returned_through_kong():
+    r = httpx.post(f"{BASE}/v1/chat/completions", json=BODY)  # 401, but still has an id
+    assert r.headers.get("x-request-id")
 
 def test_docs_and_openapi_are_not_exposed():
     assert httpx.get(f"{BASE}/docs").status_code == 404

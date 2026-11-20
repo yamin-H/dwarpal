@@ -10,12 +10,15 @@ from app.config import Settings, get_settings
 from app.core.errors import register_error_handlers
 from app.core.store import Store
 from app.db.session import init_db, make_engine, make_session_factory
+from app.observability.logging import configure_logging
+from app.observability.middleware import RequestContextMiddleware
 
 load_dotenv()
 
 
 def create_app(settings: Settings | None = None, cache=None, semantic=None, router=None) -> FastAPI:
     settings = settings or get_settings()
+    configure_logging(settings.log_level, settings.log_json, settings.log_tracebacks)
     engine = make_engine(settings.database_url)
     init_db(engine)
     if cache is None:
@@ -28,6 +31,7 @@ def create_app(settings: Settings | None = None, cache=None, semantic=None, rout
         else:
             cache = NullCache()
     app = FastAPI(title="Dwarpal", version="0.4.0")
+    app.add_middleware(RequestContextMiddleware)
     app.state.settings = settings
     app.state.store = Store(make_session_factory(engine))
     app.state.cache = cache

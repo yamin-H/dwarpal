@@ -32,4 +32,5 @@ def require_tenant(request: Request) -> Tenant:
         raise ApiError(
             401, "Invalid or revoked API key.", "invalid_api_key", "authentication_error"
         )
+    request.state.tenant_id = tenant.id
     return tenant

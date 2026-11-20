@@ -26,6 +26,11 @@ services:
               header_name: authorization
               policy: local
               fault_tolerant: true
+          - name: correlation-id
+            config:
+              header_name: X-Request-ID
+              generator: uuid
+              echo_downstream: false
       - name: health
         paths: ["/healthz"]
         strip_path: false

@@ -134,6 +134,7 @@ async def chat_completions(
         cache_status = "SKIP"
     else:
         cache_status = "MISS"
+    request.state.cache = cache_status
     use_cache = cache_status == "MISS"
     exact_active = use_cache and exact.enabled
     semantic_active = use_cache and semantic.enabled
@@ -152,6 +153,8 @@ async def chat_completions(
             hit, hit_status, hit_score = found.hit, "HIT-SEMANTIC", found.score
             if exact_active:
                 await exact.set(cache_key, hit)  # same phrasing next time skips the embedding
+    if hit:
+        request.state.cache = hit_status
 
     async def store(content, completion_tokens, prompt_tokens=None, finish="stop"):
         if not content:

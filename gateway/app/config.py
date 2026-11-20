@@ -19,7 +19,10 @@ class Settings(BaseSettings):
     embedding_model: str = "intfloat/multilingual-e5-small"
     embedding_prefix: str = "query:"
     semantic_threshold: float = 0.95    
-    routing_config: str = ""   # path to a routing JSON file; empty = no fallbacks      # placeholder: pick yours with `make bench`
+    routing_config: str = ""
+    log_level: str = "INFO"
+    log_json: bool = True
+    log_tracebacks: bool = False   # provider error messages can contain secrets
 
 
 @lru_cache
