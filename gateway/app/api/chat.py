@@ -57,28 +57,56 @@ def _completion_body(cid: str, created: int, model: str, c) -> dict:
     }
 
 
-def _usage_recorder(request: Request, tenant: Tenant, req: ChatRequest, provider_name: str):
-    store = request.app.state.store
-    start = time.perf_counter()
-    prompt_estimate = sum(_tokens(m.content) for m in req.messages)
+class UsageRecorder:
+    """Records one usage row and the matching metrics when a chat request finishes."""
 
-    async def record(status: str, prompt_tokens: int | None = None, completion_tokens: int = 0):
-        try:  # usage logging must never break a request
+    def __init__(self, request: Request, tenant: Tenant, req: ChatRequest, source, cache: str):
+        self.store = request.app.state.store
+        self.metrics = request.app.state.metrics
+        self.tenant, self.req, self.source, self.cache = tenant, req, source, cache
+        self.start = time.perf_counter()
+        self.prompt_estimate = sum(_tokens(m.content) for m in req.messages)
+        self._first_token_seen = False
+
+    @property
+    def provider_name(self) -> str:
+        return self.source if isinstance(self.source, str) else self.source.name
+
+    def first_token(self) -> None:
+        if self._first_token_seen:
+            return
+        self._first_token_seen = True
+        try:
+            self.metrics.observe_ttft(self.provider_name, time.perf_counter() - self.start)
+        except Exception:
+            log.exception("metrics failed")
+
+    async def __call__(
+        self, status: str, prompt_tokens: int | None = None, completion_tokens: int = 0
+    ) -> None:
+        elapsed = time.perf_counter() - self.start
+        prompt = self.prompt_estimate if prompt_tokens is None else prompt_tokens
+        try:  # metrics and usage logging must never break a request
+            self.metrics.observe_request(
+                tenant=self.tenant.id, model=self.req.model, status=status, cache=self.cache,
+                duration_s=elapsed, prompt_tokens=prompt, completion_tokens=completion_tokens,
+            )
+        except Exception:
+            log.exception("metrics failed")
+        try:
             await run_in_threadpool(
-                store.record_usage,
-                tenant_id=tenant.id,
-                model=req.model,
-                provider=provider_name if isinstance(provider_name, str) else provider_name.name,
-                stream=req.stream,
+                self.store.record_usage,
+                tenant_id=self.tenant.id,
+                model=self.req.model,
+                provider=self.provider_name,
+                stream=self.req.stream,
                 status=status,
-                prompt_tokens=prompt_estimate if prompt_tokens is None else prompt_tokens,
+                prompt_tokens=prompt,
                 completion_tokens=completion_tokens,
-                latency_ms=int((time.perf_counter() - start) * 1000),
+                latency_ms=int(elapsed * 1000),
             )
         except Exception:
             log.exception("usage logging failed")
-
-    return record
 
 
 async def _sse(provider: Provider, req: ChatRequest, cid: str, created: int, record, store):
@@ -86,6 +114,8 @@ async def _sse(provider: Provider, req: ChatRequest, cid: str, created: int, rec
     parts: list[str] = []
     try:
         async for piece in provider.stream(req):
+            if not parts:
+                record.first_token()
             parts.append(piece)
             yield _chunk(cid, created, req.model, {"content": piece})
     except ApiError as exc:
@@ -104,7 +134,9 @@ async def _sse(provider: Provider, req: ChatRequest, cid: str, created: int, rec
 
 async def _sse_replay(req: ChatRequest, cid: str, created: int, hit: CachedCompletion, record):
     yield _chunk(cid, created, req.model, {"role": "assistant"})
-    for piece in replay_pieces(hit.content):
+    for i, piece in enumerate(replay_pieces(hit.content)):
+        if i == 0:
+            record.first_token()
         yield _chunk(cid, created, req.model, {"content": piece})
     await record("ok", 0, 0)
     yield _chunk(cid, created, req.model, {}, finish=hit.finish_reason)
@@ -113,7 +145,7 @@ async def _sse_replay(req: ChatRequest, cid: str, created: int, hit: CachedCompl
 
 @router.post("/chat/completions")
 async def chat_completions(
-    req: ChatRequest, request: Request, tenant: Tenant = Depends(require_tenant)  # noqa: B008
+    req: ChatRequest, request: Request, tenant: Tenant = Depends(require_tenant)
 ):
     if not tenant.allows(req.model):
         raise ApiError(
@@ -134,7 +166,6 @@ async def chat_completions(
         cache_status = "SKIP"
     else:
         cache_status = "MISS"
-    request.state.cache = cache_status
     use_cache = cache_status == "MISS"
     exact_active = use_cache and exact.enabled
     semantic_active = use_cache and semantic.enabled
@@ -153,8 +184,8 @@ async def chat_completions(
             hit, hit_status, hit_score = found.hit, "HIT-SEMANTIC", found.score
             if exact_active:
                 await exact.set(cache_key, hit)  # same phrasing next time skips the embedding
-    if hit:
-        request.state.cache = hit_status
+    served_cache = hit_status if hit else cache_status
+    request.state.cache = served_cache  # shows up in the request log line
 
     async def store(content, completion_tokens, prompt_tokens=None, finish="stop"):
         if not content:
@@ -169,9 +200,8 @@ async def chat_completions(
             await semantic.store(tenant.id, req, vector, entry)
 
     if hit:
-        record = _usage_recorder(
-            request, tenant, req, "cache:semantic" if hit_score is not None else "cache"
-        )
+        source = "cache:semantic" if hit_score is not None else "cache"
+        record = UsageRecorder(request, tenant, req, source, served_cache)
         headers = {"X-Cache": hit_status}
         if hit_score is not None:
             headers["X-Cache-Score"] = f"{hit_score:.4f}"
@@ -184,7 +214,7 @@ async def chat_completions(
         await record("ok", 0, 0)
         return JSONResponse(_completion_body(cid, created, req.model, hit), headers=headers)
 
-    record = _usage_recorder(request, tenant, req, provider)
+    record = UsageRecorder(request, tenant, req, provider, served_cache)
     headers = {"X-Cache": cache_status}
     if cache_status == "SKIP":
         headers["X-Cache-Reason"] = decision.reason
