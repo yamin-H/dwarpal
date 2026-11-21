@@ -271,7 +271,7 @@ async function detail(root, id, ctx) {
             el("td", {}, relTime(k.created_at)),
             el("td", {}, k.expires_at ? new Date(k.expires_at).toLocaleString() : "\u2013"),
             el("td", { class: "num" }, k.status === "active" ? el("button", { class: "btn small", type: "button", onclick: rotate(k) }, "Rotate") : null, " ",
-              k.status === "active" || k.status === "expiring" ? el("button", { class: "btn small danger", type: "button", onclick: revoke(k) }, "Revoke") : null))))),
+              k.status === "active" || k.status === "expiring" ? el("button", { class: "btn small danger", type: "button", onclick: revoke(k) }, "Revoke") : null)))))),
         el("p", { class: "hint" }, "The full key is shown once, when it is created. Only a hash is stored.")),
       el("div", { class: "card" }, el("h2", {}, "Maintenance"),
         el("p", { class: "muted" }, "Remove this tenant's cached answers, for example after changing a threshold or to repeat a test from a clean state."),

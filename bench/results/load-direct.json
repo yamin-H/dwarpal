@@ -1,0 +1,70 @@
+{
+  "label": "direct",
+  "config": {
+    "base_url": "http://localhost:8001",
+    "model": "auto",
+    "requests": 300,
+    "concurrency": 20,
+    "unique_questions": 30,
+    "stream_ratio": 0.3,
+    "seed": 1
+  },
+  "summary": {
+    "requests": 300,
+    "ok": 220,
+    "errors": 80,
+    "status_counts": {
+      "0": 80,
+      "200": 220
+    },
+    "wall_seconds": 309.43,
+    "rps": 1.0,
+    "hit_ratio": 0.873,
+    "by_cache": {
+      "HIT": {
+        "count": 190,
+        "p50_ms": 1240.2,
+        "p95_ms": 2190.6,
+        "p99_ms": 2336.7,
+        "mean_ms": 1200.1
+      },
+      "HIT-SEMANTIC": {
+        "count": 2,
+        "p50_ms": 3166.3,
+        "p95_ms": 4034.9,
+        "p99_ms": 4112.1,
+        "mean_ms": 3166.3
+      },
+      "MISS": {
+        "count": 28,
+        "p50_ms": 52354.1,
+        "p95_ms": 57358.5,
+        "p99_ms": 57910.7,
+        "mean_ms": 39513.2
+      }
+    },
+    "ttft_ms_by_cache": {
+      "HIT": {
+        "count": 46,
+        "p50_ms": 132.9,
+        "p95_ms": 522.4,
+        "p99_ms": 532.9,
+        "mean_ms": 203.8
+      },
+      "HIT-SEMANTIC": {
+        "count": 1,
+        "p50_ms": 2237.9,
+        "p95_ms": 2237.9,
+        "p99_ms": 2237.9,
+        "mean_ms": 2237.9
+      },
+      "MISS": {
+        "count": 7,
+        "p50_ms": 49988.1,
+        "p95_ms": 50017.8,
+        "p99_ms": 50018.4,
+        "mean_ms": 43218.4
+      }
+    }
+  }
+}

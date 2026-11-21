@@ -1,0 +1,164 @@
+{
+  "label": "drill",
+  "config": {
+    "base_url": "http://localhost:8000",
+    "model": "mock-fail",
+    "failing_provider": "mock-fail",
+    "duration": 75,
+    "rate": 1
+  },
+  "summary": {
+    "requests": 75,
+    "ok": 75,
+    "success_rate": 1.0,
+    "served_by": {
+      "mock": 75
+    },
+    "status_counts": {
+      "200": 75
+    },
+    "failing_provider": "mock-fail",
+    "failing_calls": 5,
+    "calls_avoided": 70,
+    "circuit_opened": 3,
+    "p95_ms": 430.9,
+    "bucket_seconds": 5,
+    "timeline": [
+      {
+        "t": 0,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 5,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 10,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 15,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 20,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 25,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 30,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 35,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 40,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 45,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 50,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 55,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 60,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 65,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      },
+      {
+        "t": 70,
+        "requests": 5,
+        "ok": 5,
+        "errors": 0,
+        "served_by": {
+          "mock": 5
+        }
+      }
+    ]
+  }
+}

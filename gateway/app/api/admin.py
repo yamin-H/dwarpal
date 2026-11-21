@@ -159,7 +159,7 @@ def list_keys(tenant_id: str, request: Request):
         raise ApiError(404, "Tenant not found.", "tenant_not_found") from None
 
 
-PROVIDER_KEY_NAMES = ("OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY")
+PROVIDER_KEY_NAMES = ("OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY")
 
 
 @router.get("/tenants")

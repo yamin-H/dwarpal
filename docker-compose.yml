@@ -34,6 +34,8 @@ services:
       DWARPAL_CONSOLE_ENABLED: ${DWARPAL_CONSOLE_ENABLED:-false}
     volumes:
       - ./config:/srv/config:ro
+      - ./gateway:/srv/gateway
+      - ./ui:/srv/ui
     depends_on:
       postgres:
         condition: service_healthy

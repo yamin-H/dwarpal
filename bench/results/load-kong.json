@@ -1,0 +1,55 @@
+{
+  "label": "kong",
+  "config": {
+    "base_url": "http://localhost:8000",
+    "model": "auto",
+    "requests": 100,
+    "concurrency": 10,
+    "unique_questions": 30,
+    "stream_ratio": 0.3,
+    "seed": 1
+  },
+  "summary": {
+    "requests": 100,
+    "ok": 100,
+    "errors": 0,
+    "status_counts": {
+      "200": 100
+    },
+    "wall_seconds": 15.15,
+    "rps": 6.6,
+    "hit_ratio": 1.0,
+    "by_cache": {
+      "HIT": {
+        "count": 72,
+        "p50_ms": 372.8,
+        "p95_ms": 1752.2,
+        "p99_ms": 1764.3,
+        "mean_ms": 605.2
+      },
+      "HIT-SEMANTIC": {
+        "count": 28,
+        "p50_ms": 1743.4,
+        "p95_ms": 8856.6,
+        "p99_ms": 8864.5,
+        "mean_ms": 3818.2
+      }
+    },
+    "ttft_ms_by_cache": {
+      "HIT": {
+        "count": 26,
+        "p50_ms": 79.6,
+        "p95_ms": 557.6,
+        "p99_ms": 926.2,
+        "mean_ms": 148.1
+      },
+      "HIT-SEMANTIC": {
+        "count": 9,
+        "p50_ms": 296.0,
+        "p95_ms": 8520.3,
+        "p99_ms": 8576.0,
+        "mean_ms": 2153.4
+      }
+    }
+  }
+}

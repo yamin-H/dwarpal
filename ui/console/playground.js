@@ -11,6 +11,139 @@ const SAMPLES = [
   ["Time-sensitive", "namaz er time ajke koyta"],
 ];
 
+function inlineNodes(text) {
+  const nodes = [];
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
+  let lastIdx = 0;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      nodes.push(document.createTextNode(text.slice(lastIdx, match.index)));
+    }
+    const m = match[0];
+    if (m.startsWith("**") && m.endsWith("**")) {
+      nodes.push(el("strong", {}, m.slice(2, -2)));
+    } else if (m.startsWith("`") && m.endsWith("`")) {
+      nodes.push(el("code", {}, m.slice(1, -1)));
+    } else if (m.startsWith("*") && m.endsWith("*")) {
+      nodes.push(el("em", {}, m.slice(1, -1)));
+    }
+    lastIdx = regex.lastIndex;
+  }
+  if (lastIdx < text.length) {
+    nodes.push(document.createTextNode(text.slice(lastIdx)));
+  }
+  return nodes;
+}
+
+function renderMarkdown(raw, container) {
+  container.replaceChildren();
+  if (!raw) return;
+  const lines = raw.split("\n");
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      i++;
+      continue;
+    }
+
+    if (trimmed.startsWith("```")) {
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !lines[i].trim().startsWith("```")) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++;
+      container.append(el("pre", { class: "msg-pre" }, el("code", {}, codeLines.join("\n"))));
+      continue;
+    }
+
+    if (/^(\-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      container.append(el("hr", { class: "msg-hr" }));
+      i++;
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const tag = level <= 2 ? "h3" : "h4";
+      container.append(el(tag, { class: `msg-h msg-h${level}` }, inlineNodes(headingMatch[2])));
+      i++;
+      continue;
+    }
+
+    if (trimmed.startsWith("|") && trimmed.endsWith("|") && i + 1 < lines.length && /^\|[\s\-:|]+\|$/.test(lines[i + 1].trim())) {
+      const headerRow = trimmed.slice(1, -1).split("|").map((c) => c.trim());
+      i += 2;
+      const bodyRows = [];
+      while (i < lines.length && lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|")) {
+        bodyRows.push(lines[i].trim().slice(1, -1).split("|").map((c) => c.trim()));
+        i++;
+      }
+      const table = el("table", {},
+        el("thead", {}, el("tr", {}, headerRow.map((h) => el("th", {}, inlineNodes(h))))),
+        el("tbody", {}, bodyRows.map((row) => el("tr", {}, row.map((cell) => el("td", {}, inlineNodes(cell)))))));
+      container.append(el("div", { class: "msg-table-wrap" }, table));
+      continue;
+    }
+
+    if (/^[\*\-]\s+/.test(trimmed)) {
+      const items = [];
+      while (i < lines.length && /^[\*\-]\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^[\*\-]\s+/, ""));
+        i++;
+      }
+      container.append(el("ul", { class: "msg-list" }, items.map((item) => el("li", {}, inlineNodes(item)))));
+      continue;
+    }
+
+    if (/^\d+\.\s+/.test(trimmed)) {
+      const items = [];
+      while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^\d+\.\s+/, ""));
+        i++;
+      }
+      container.append(el("ol", { class: "msg-list" }, items.map((item) => el("li", {}, inlineNodes(item)))));
+      continue;
+    }
+
+    if (trimmed.startsWith(">")) {
+      const quotes = [];
+      while (i < lines.length && lines[i].trim().startsWith(">")) {
+        quotes.push(lines[i].trim().replace(/^>\s?/, ""));
+        i++;
+      }
+      container.append(el("blockquote", { class: "msg-quote" }, inlineNodes(quotes.join(" "))));
+      continue;
+    }
+
+    const pLines = [trimmed];
+    i++;
+    while (i < lines.length) {
+      const nextTrimmed = lines[i].trim();
+      if (!nextTrimmed ||
+          nextTrimmed.startsWith("#") ||
+          nextTrimmed.startsWith("```") ||
+          nextTrimmed.startsWith("|") ||
+          /^[\*\-]\s+/.test(nextTrimmed) ||
+          /^\d+\.\s+/.test(nextTrimmed) ||
+          nextTrimmed.startsWith(">") ||
+          /^(\-{3,}|\*{3,}|_{3,})$/.test(nextTrimmed)) {
+        break;
+      }
+      pLines.push(nextTrimmed);
+      i++;
+    }
+    container.append(el("p", { class: "msg-p" }, inlineNodes(pLines.join(" "))));
+  }
+}
+
 export async function render(root, ctx) {
   const { tenants } = (await api("/admin/tenants")).data;
   if (!tenants.length) {
@@ -116,9 +249,10 @@ export async function render(root, ctx) {
       } else if (stream.checked) {
         answer.textContent = "";
         reply = await readStream(res, answer, () => { if (first === null) first = performance.now() - started; });
+        renderMarkdown(reply, answer);
       } else {
         reply = (await res.json()).choices[0].message.content;
-        answer.textContent = reply;
+        renderMarkdown(reply, answer);
       }
     } catch (err) {
       answer.classList.add("err");
@@ -128,14 +262,17 @@ export async function render(root, ctx) {
       send.disabled = false;
     }
     const total = performance.now() - started;
-    meta.append(cacheBadge(info.cache),
+    const metaItems = [
+      cacheBadge(info.cache),
       info.score ? el("span", {}, `score ${info.score}`) : null,
       info.reason ? el("span", {}, `reason: ${info.reason}`) : null,
       info.provider ? el("span", {}, `provider: ${info.provider}`) : null,
       first !== null ? el("span", {}, `first token ${fmtMs(first)}`) : null,
       el("span", {}, `total ${fmtMs(total)}`),
       info.status && info.status !== 200 ? badge(`HTTP ${info.status}`, "err") : null,
-      info.id ? el("code", { title: "Search the gateway logs for this id" }, info.id.slice(0, 8)) : null);
+      info.id ? el("code", { title: "Search the gateway logs for this id" }, info.id.slice(0, 8)) : null,
+    ].filter(Boolean);
+    meta.append(...metaItems);
     if (keep.checked && reply) history.push({ role: "user", content: text }, { role: "assistant", content: reply });
   }
 
